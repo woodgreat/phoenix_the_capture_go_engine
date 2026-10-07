@@ -30,6 +30,7 @@ void main() {
     i32[] hist_meta;    // 5 values per snapshot: bc, wc, ko_x, ko_y, moves
     i32 ai_level = 1;   // clamped through the factory below
     ai_level = create_ai(ai_level);
+    Level1 l1 = new Level1();
 
     i32 empty_streak = 0;
     while (true) {
@@ -297,36 +298,29 @@ void main() {
             if (color == 0) {
                 println!("?{}invalid color", p);
             } else {
-                i32 mv = b.genmove_level1(color);
-                if (mv < 0) {
-                    println!("={}pass", p);
+                // snapshot BEFORE the AI move (same convention as play)
+                for (i32 sx = 0; sx < 13; sx++) {
+                    for (i32 sy = 0; sy < 13; sy++) {
+                        hist_cells.push(b.get(sx, sy));
+                    }
+                }
+                hist_meta.push(b.black_captures);
+                hist_meta.push(b.white_captures);
+                hist_meta.push(b.ko_x);
+                hist_meta.push(b.ko_y);
+                hist_meta.push(b.move_count);
+                // ownership round-trip: AI decides, places, hands back
+                b = l1.genmove(b, color);
+                if (l1.last_x() >= 0) {
+                    String coord = xy_to_gtp(l1.last_x(), l1.last_y());
+                    println!("={}{}", p, coord.clone());
                 } else {
-                    i32 mx = mv / 13;
-                    i32 my = mv - mx * 13;
-                    // history snapshot (same convention as play: before)
-                    for (i32 sx = 0; sx < 13; sx++) {
-                        for (i32 sy = 0; sy < 13; sy++) {
-                            hist_cells.push(b.get(sx, sy));
-                        }
-                    }
-                    hist_meta.push(b.black_captures);
-                    hist_meta.push(b.white_captures);
-                    hist_meta.push(b.ko_x);
-                    hist_meta.push(b.ko_y);
-                    hist_meta.push(b.move_count);
-                    i32 r = b.place_stone(mx, my, color);
-                    if (r >= 0) {
-                        String coord = xy_to_gtp(mx, my);
-                        println!("={}{}", p, coord.clone());
-                    } else {
-                        // should not happen (AI candidates are legal);
-                        // fall back to pass, drop snapshot
-                        i32 cbase2 = (i32)hist_cells.len() - 169;
-                        hist_cells.truncate((usize)cbase2);
-                        i32 mbase3 = (i32)hist_meta.len() - 5;
-                        hist_meta.truncate((usize)mbase3);
-                        println!("={}pass", p);
-                    }
+                    // AI passed (no legal point): drop snapshot
+                    i32 cbase2 = (i32)hist_cells.len() - 169;
+                    hist_cells.truncate((usize)cbase2);
+                    i32 mbase3 = (i32)hist_meta.len() - 5;
+                    hist_meta.truncate((usize)mbase3);
+                    println!("={}pass", p);
                 }
             }
         } else {

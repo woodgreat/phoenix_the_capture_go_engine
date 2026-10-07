@@ -1,21 +1,110 @@
-// ai.hust - AI factory and level registry
-// Step 9: level 1 (greedy capture + random empty point)
+// ai.hust - AI strategy layer (shape-interface pattern, r44)
 //
-// ARCHITECTURE NOTE (Hust 0.1.35 constraints, see issue report B2/B3/B5):
-// The original design used a MoveGenerator interface taking Board and
-// returning Point. Classes cannot be passed by value without losing
-// ownership, cannot be returned by transpiled free functions, and arrays
-// cannot be parameters. So the actual move generation lives in Board
-// methods (genmove_level1 in board.hust) returning an encoded move
-// (x*13+y, -1 = pass). This file keeps the level registry / factory:
-// when the transpiler gains class-safe signatures, the interface
-// MoveGenerator { genmove(Board, color) } replaces the dispatch.
+// Declaration: no types (shape). Implementation: types filled in.
+// Ownership round-trip: the board moves INTO genmove, the AI places
+// its stone, and the board moves BACK to the caller
+// (`b = l1.genmove(b, color);` - verified in io_probe v7b).
+// Level1 records the move it made; the caller reads last_x/last_y
+// to build the GTP response.
+
+use board;
+
+interface MoveGenerator {
+    public genmove(board, color);
+}
+
+public class Level1 implements MoveGenerator {
+    i32 last_x;
+    i32 last_y;
+
+    public Level1() {
+        self.last_x = -1;
+        self.last_y = -1;
+    }
+
+    // The move made by the last genmove call (-1 = pass / nothing)
+    public i32 last_x() {
+        return self.last_x;
+    }
+
+    public i32 last_y() {
+        return self.last_y;
+    }
+
+    public Board genmove(Board board, i32 color) {
+        Board b2 = board;   // rebind: params immutable, locals are mut
+        i32 opp = b2.opponent(color);
+        i32[169] capture_moves = {0};
+        i32 n_cap = 0;
+        i32[169] empty_moves = {0};
+        i32 n_empty = 0;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (b2.get(x, y) == 0) {
+                    bool is_ko = b2.is_ko_point(x, y);
+                    // try the placement virtually
+                    b2.set(x, y, color);
+                    bool captures = false;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = x + dxs[d];
+                        i32 ny = y + dys[d];
+                        if (b2.is_valid(nx, ny)) {
+                            if (b2.get(nx, ny) == opp) {
+                                if (b2.count_liberties(nx, ny) == 0) {
+                                    captures = true;
+                                }
+                            }
+                        }
+                    }
+                    bool alive = b2.count_liberties(x, y) > 0;
+                    b2.set(x, y, 0);
+                    if (captures || alive) {
+                        i32 enc = x * 13 + y;
+                        empty_moves[n_empty] = enc;
+                        n_empty = n_empty + 1;
+                        if (captures) {
+                            if (!is_ko) {
+                                capture_moves[n_cap] = enc;
+                                n_cap = n_cap + 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i32 mv = -1;
+        if (n_cap > 0) {
+            mv = capture_moves[b2.rand_below(n_cap)];
+        } else if (n_empty > 0) {
+            mv = empty_moves[b2.rand_below(n_empty)];
+        }
+        if (mv < 0) {
+            // no legal point: pass
+            self.last_x = -1;
+            self.last_y = -1;
+            return b2;
+        }
+        i32 mx = mv / 13;
+        i32 my = mv - mx * 13;
+        i32 r = b2.place_stone(mx, my, color);
+        if (r >= 0) {
+            self.last_x = mx;
+            self.last_y = my;
+        } else {
+            // defensive: candidates are pre-checked, should not happen
+            self.last_x = -1;
+            self.last_y = -1;
+        }
+        return b2;
+    }
+}
 
 // Clamp a requested AI level to what is implemented.
 // Currently only level 1 exists; higher levels land in Steps 11-12.
+// (Will return MoveGenerator instances once the transpiler supports
+// interface-typed returns / derive(Clone) - see issue report Q4.)
 public i32 create_ai(i32 requested_level) {
-    if (requested_level >= 1 && requested_level <= 10) {
-        return 1;
-    }
     return 1;
 }
