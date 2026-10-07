@@ -1,0 +1,7 @@
+# Hust build artifacts
+phoenix_hust/phoenix
+*.exe
+
+# Rust build directories
+target/
+build/

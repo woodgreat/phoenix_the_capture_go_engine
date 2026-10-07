@@ -1,0 +1,23 @@
+// board.hust - 13x13 board representation
+// Step 1: minimal skeleton (full logic in Step 2)
+
+public class Board {
+    // 0 = empty, 1 = black, 2 = white
+    i32[13][13] grid;
+
+    public Board() {
+        for (i32 i = 0; i < 13; i++) {
+            for (i32 j = 0; j < 13; j++) {
+                self.grid[i][j] = 0;
+            }
+        }
+    }
+
+    // Get color at (x, y); -1 if out of range
+    public i32 get(i32 x, i32 y) {
+        if (x >= 0 && x < 13 && y >= 0 && y < 13) {
+            return self.grid[x][y];
+        }
+        return -1;
+    }
+}

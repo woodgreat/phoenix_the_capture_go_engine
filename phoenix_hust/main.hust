@@ -1,0 +1,10 @@
+// Phoenix - Wood Capture Go Engine
+// Entry point (Step 1: minimal skeleton, verifies project mode)
+
+use board;
+
+void main() {
+    Board b = new Board();
+    println!("Phoenix Wood Capture Go Engine v0.1.0");
+    println!("Board created, center (6,6) = {}", b.get(6, 6));
+}
