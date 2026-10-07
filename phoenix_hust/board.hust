@@ -17,6 +17,12 @@ public class Board {
     // Move counter (placement moves only, opening setup not counted)
     i32 move_count;
 
+    // Simple ko: point of the last single-stone capture (-1 = no ko).
+    // The side to move may not capture exactly one stone at this point
+    // (immediate recapture would repeat the position).
+    i32 ko_x;
+    i32 ko_y;
+
     // Constructor: scalar fields only.
     // IMPORTANT (Hust transpiler limitation): the ctor body only supports
     // direct field assignments (self.field = value). Method calls and loops
@@ -27,6 +33,8 @@ public class Board {
         self.black_captures = 0;
         self.white_captures = 0;
         self.move_count = 0;
+        self.ko_x = -1;
+        self.ko_y = -1;
     }
 
     // Reset board to the mandatory twist-cross opening position
@@ -34,6 +42,8 @@ public class Board {
         self.black_captures = 0;
         self.white_captures = 0;
         self.move_count = 0;
+        self.ko_x = -1;
+        self.ko_y = -1;
         for (i32 i = 0; i < 13; i++) {
             for (i32 j = 0; j < 13; j++) {
                 self.grid[i][j] = 0;
@@ -179,10 +189,13 @@ public class Board {
         return count;
     }
 
-    // Place a stone and remove opponent groups left without liberties.
-    // Returns number of stones captured this move, or -1 if illegal
-    // (out of range / occupied).
-    // NOTE: suicide and ko checks are added in Step 5.
+    // Place a stone with full rule checking:
+    //   returns captured count (>= 0) on success, or
+    //   -1 = out of range / occupied
+    //   -2 = suicide (no liberties, no capture -> forbidden point)
+    //   -3 = ko (immediate single-stone recapture at the ko point)
+    // State is saved before the tentative placement and restored on
+    // rejection, so failed moves leave the board untouched.
     public i32 place_stone(i32 x, i32 y, i32 color) {
         if (!self.is_valid(x, y)) {
             return -1;
@@ -190,23 +203,81 @@ public class Board {
         if (!self.is_empty(x, y)) {
             return -1;
         }
+
+        // Save state for rollback (loop copy; field-level 2D assign is
+        // not a verified Hust feature)
+        i32[13][13] saved = {0};
+        for (i32 i = 0; i < 13; i++) {
+            for (i32 j = 0; j < 13; j++) {
+                saved[i][j] = self.grid[i][j];
+            }
+        }
+        i32 save_bc = self.black_captures;
+        i32 save_wc = self.white_captures;
+        i32 save_kx = self.ko_x;
+        i32 save_ky = self.ko_y;
+
         self.grid[x][y] = color;
         i32 captured = 0;
+        i32 cap_x = -1;
+        i32 cap_y = -1;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
         i32 opp = self.opponent(color);
         for (i32 d = 0; d < 4; d++) {
             i32 nx = x + dxs[d];
             i32 ny = y + dys[d];
-            // No `continue` here - see count_liberties note (hang bug).
             if (self.is_valid(nx, ny)) {
                 if (self.grid[nx][ny] == opp) {
                     if (self.count_liberties(nx, ny) == 0) {
-                        captured = captured + self.remove_group(nx, ny);
+                        i32 removed = self.remove_group(nx, ny);
+                        captured = captured + removed;
+                        if (removed == 1) {
+                            cap_x = nx;
+                            cap_y = ny;
+                        }
                     }
                 }
             }
         }
+
+        // Suicide: own group has no liberties and nothing was captured
+        if (captured == 0) {
+            if (self.count_liberties(x, y) == 0) {
+                for (i32 i = 0; i < 13; i++) {
+                    for (i32 j = 0; j < 13; j++) {
+                        self.grid[i][j] = saved[i][j];
+                    }
+                }
+                self.black_captures = save_bc;
+                self.white_captures = save_wc;
+                self.ko_x = save_kx;
+                self.ko_y = save_ky;
+                return -2;
+            }
+        }
+
+        // Ko: single-stone recapture exactly at the previous ko point
+        if (captured == 1) {
+            if (x == self.ko_x && y == self.ko_y) {
+                for (i32 i = 0; i < 13; i++) {
+                    for (i32 j = 0; j < 13; j++) {
+                        self.grid[i][j] = saved[i][j];
+                    }
+                }
+                self.black_captures = save_bc;
+                self.white_captures = save_wc;
+                self.ko_x = save_kx;
+                self.ko_y = save_ky;
+                return -3;
+            }
+            self.ko_x = cap_x;
+            self.ko_y = cap_y;
+        } else {
+            self.ko_x = -1;
+            self.ko_y = -1;
+        }
+
         if (color == 1) {
             self.black_captures = self.black_captures + captured;
         } else {

@@ -70,6 +70,63 @@ void main() {
     i32 d6 = b.place_stone(12, 11, 2);
     println!("  both sides: black -> {} , white -> {} (expect 1 1: black took A1, white took M13)",
         b.black_captures, b.white_captures);
+    println!("");
+
+    // ============ Step 5 verification: suicide & ko ============
+    println!("Step 5: suicide and ko rule");
+
+    // Scenario E: suicide (no liberties, no capture) -> reject -2
+    b.clear();
+    i32 e1 = b.place_stone(0, 1, 2);
+    i32 e2 = b.place_stone(1, 0, 2);
+    i32 e3 = b.place_stone(0, 0, 1);
+    bool e4 = b.is_empty(0, 0);
+    println!("  suicide: W(0,1) -> {} , W(1,0) -> {} , B(0,0) -> {} (expect 0 0 -2)",
+        e1, e2, e3);
+    println!("  after reject: A1 empty -> {} (expect true, board untouched)", e4);
+
+    // Scenario F: snapback-like pounce (self group has 0 liberties
+    // BUT captures 2 -> legal)
+    b.clear();
+    i32 f1 = b.place_stone(0, 1, 2);
+    i32 f2 = b.place_stone(1, 0, 2);
+    i32 f3 = b.place_stone(0, 2, 1);
+    i32 f4 = b.place_stone(1, 1, 1);
+    i32 f5 = b.place_stone(2, 0, 1);
+    i32 f6 = b.place_stone(0, 0, 1);
+    println!("  pounce: setup -> {} {} {} {} {} , B(0,0) -> {} (expect 0 0 0 0 0 2)",
+        f1, f2, f3, f4, f5, f6);
+    println!("  after: A1 black -> {} , A2 empty -> {} , B1 empty -> {} (expect 1 true true)",
+        b.get(0, 0), b.is_empty(0, 1), b.is_empty(1, 0));
+
+    // Scenario G: ko lifecycle (corner ko - the only shape where the
+    // capturing stone can be a lone stone with the ko point as its
+    // last liberty)
+    b.clear();
+    i32 g0 = b.place_stone(0, 0, 2);
+    i32 g1 = b.place_stone(1, 0, 1);
+    i32 g2 = b.place_stone(1, 1, 2);
+    i32 g3 = b.place_stone(0, 2, 2);
+    i32 g4 = b.place_stone(0, 1, 1);
+    println!("  ko: W(0,0) -> {} , B(1,0) -> {} , W(1,1) W(0,2) -> {} {} , B(0,1) captures -> {} (expect 0 0 0 0 1)",
+        g0, g1, g2, g3, g4);
+    println!("  ko point -> ({},{}) (expect 0 0)", b.ko_x, b.ko_y);
+
+    // Immediate recapture at the ko point: forbidden
+    i32 g6 = b.place_stone(0, 0, 2);
+    bool g7 = b.is_empty(0, 0);
+    bool g8 = b.get(0, 1) == 1;
+    println!("  W(0,0) immediate recapture -> {} (expect -3)", g6);
+    println!("  after reject: (0,0) empty -> {} , (0,1) black stays -> {} (expect true true)",
+        g7, g8);
+
+    // Ko dissolves after any other move
+    i32 g9 = b.place_stone(0, 12, 2);
+    i32 g10 = b.place_stone(0, 0, 2);
+    println!("  W(0,12) clears ko -> {} (expect 0) , W(0,0) now captures -> {} (expect 1)",
+        g9, g10);
+    println!("  captures: black -> {} , white -> {} (expect 1 1)",
+        b.black_captures, b.white_captures);
 
     // ============ Step 3 verification: coordinates ============
     println!("Step 3: coordinate conversion");
