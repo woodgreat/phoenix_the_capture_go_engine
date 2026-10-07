@@ -17,6 +17,9 @@ public class Board {
     // Move counter (placement moves only, opening setup not counted)
     i32 move_count;
 
+    // Pseudo-random seed for AI move selection (LCG)
+    i32 rng_seed;
+
     // Simple ko: point of the last single-stone capture (-1 = no ko).
     // The side to move may not capture exactly one stone at this point
     // (immediate recapture would repeat the position).
@@ -35,6 +38,7 @@ public class Board {
         self.move_count = 0;
         self.ko_x = -1;
         self.ko_y = -1;
+        self.rng_seed = 88675123;
     }
 
     // Reset board to the mandatory twist-cross opening position
@@ -350,5 +354,80 @@ public class Board {
     // Restore the move counter
     public void set_move_count(i32 n) {
         self.move_count = n;
+    }
+
+    // Pseudo-random number in [0, n-1] via LCG. i64 intermediate keeps
+    // the multiply from overflowing i32.
+    public i32 rand_below(i32 n) {
+        if (n <= 0) {
+            return 0;
+        }
+        i64 s = (i64)self.rng_seed * 1103515245 + 12345;
+        i64 t = s >> 16;
+        i64 t2 = t & 32767;
+        self.rng_seed = (i32)t2;
+        i32 v = self.rng_seed;
+        if (v < 0) {
+            v = -v;
+        }
+        return v % n;
+    }
+
+    // AI level 1: greedy capture, else random legal empty point.
+    // Hust constraint note: AI lives as Board methods because classes
+    // cannot be passed by reference (B2/B3/B5 in the issue report);
+    // the move is encoded as x*13+y (-1 = pass, board full).
+    // The ko point is excluded from capture candidates (a single-stone
+    // recapture there would be rejected); suicide points are excluded
+    // from all candidates.
+    public i32 genmove_level1(i32 color) {
+        i32 opp = self.opponent(color);
+        i32[169] capture_moves = {0};
+        i32 n_cap = 0;
+        i32[169] empty_moves = {0};
+        i32 n_empty = 0;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (self.grid[x][y] == 0) {
+                    bool is_ko = x == self.ko_x && y == self.ko_y;
+                    // try the placement virtually
+                    self.grid[x][y] = color;
+                    bool captures = false;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = x + dxs[d];
+                        i32 ny = y + dys[d];
+                        if (self.is_valid(nx, ny)) {
+                            if (self.grid[nx][ny] == opp) {
+                                if (self.count_liberties(nx, ny) == 0) {
+                                    captures = true;
+                                }
+                            }
+                        }
+                    }
+                    bool alive = self.count_liberties(x, y) > 0;
+                    self.grid[x][y] = 0;
+                    if (captures || alive) {
+                        i32 enc = x * 13 + y;
+                        empty_moves[n_empty] = enc;
+                        n_empty = n_empty + 1;
+                        if (captures) {
+                            if (!is_ko) {
+                                capture_moves[n_cap] = enc;
+                                n_cap = n_cap + 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (n_cap > 0) {
+            return capture_moves[self.rand_below(n_cap)];
+        }
+        if (n_empty > 0) {
+            return empty_moves[self.rand_below(n_empty)];
+        }
+        return -1;
     }
 }

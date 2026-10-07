@@ -1,0 +1,21 @@
+// ai.hust - AI factory and level registry
+// Step 9: level 1 (greedy capture + random empty point)
+//
+// ARCHITECTURE NOTE (Hust 0.1.35 constraints, see issue report B2/B3/B5):
+// The original design used a MoveGenerator interface taking Board and
+// returning Point. Classes cannot be passed by value without losing
+// ownership, cannot be returned by transpiled free functions, and arrays
+// cannot be parameters. So the actual move generation lives in Board
+// methods (genmove_level1 in board.hust) returning an encoded move
+// (x*13+y, -1 = pass). This file keeps the level registry / factory:
+// when the transpiler gains class-safe signatures, the interface
+// MoveGenerator { genmove(Board, color) } replaces the dispatch.
+
+// Clamp a requested AI level to what is implemented.
+// Currently only level 1 exists; higher levels land in Steps 11-12.
+public i32 create_ai(i32 requested_level) {
+    if (requested_level >= 1 && requested_level <= 10) {
+        return 1;
+    }
+    return 1;
+}
