@@ -31,6 +31,8 @@ void main() {
     i32 ai_level = 1;   // clamped through the factory below
     ai_level = create_ai(ai_level);
     Level1 l1 = new Level1();
+    Level3 l3 = new Level3();
+    Level5 l5 = new Level5();
 
     i32 empty_streak = 0;
     while (true) {
@@ -309,10 +311,24 @@ void main() {
                 hist_meta.push(b.ko_x);
                 hist_meta.push(b.ko_y);
                 hist_meta.push(b.move_count);
-                // ownership round-trip: AI decides, places, hands back
-                b = l1.genmove(b, color);
-                if (l1.last_x() >= 0) {
-                    String coord = xy_to_gtp(l1.last_x(), l1.last_y());
+                // dispatch through the interface variable by level
+                i32 lx = -1;
+                i32 ly = -1;
+                if (ai_level >= 5) {
+                    b = l5.genmove(b, color);
+                    lx = l5.last_x();
+                    ly = l5.last_y();
+                } else if (ai_level == 3) {
+                    b = l3.genmove(b, color);
+                    lx = l3.last_x();
+                    ly = l3.last_y();
+                } else {
+                    b = l1.genmove(b, color);
+                    lx = l1.last_x();
+                    ly = l1.last_y();
+                }
+                if (lx >= 0) {
+                    String coord = xy_to_gtp(lx, ly);
                     println!("={}{}", p, coord.clone());
                 } else {
                     // AI passed (no legal point): drop snapshot

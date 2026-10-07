@@ -378,4 +378,131 @@ public class Board {
         return v % n;
     }
 
+
+    // === Search primitives for the alpha-beta AI (Step 11) ===
+
+    // Static evaluation from ai_color's perspective:
+    //   stone diff * 10 + liberty attribution diff * 4 + counter diff * 100
+    // Stones removed during search are absent from the grid, so the
+    // stone diff already reflects captures made inside the search.
+    public i32 evaluate_for(i32 ai_color) {
+        i32 opp = self.opponent(ai_color);
+        i32 my_stones = 0;
+        i32 opp_stones = 0;
+        i32 my_libs = 0;
+        i32 opp_libs = 0;
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                i32 c = self.grid[x][y];
+                if (c == ai_color) {
+                    my_stones = my_stones + 1;
+                } else if (c == opp) {
+                    opp_stones = opp_stones + 1;
+                } else {
+                    i32 has_my = 0;
+                    i32 has_opp = 0;
+                    i32[4] dxs = {0, 0, 1, -1};
+                    i32[4] dys = {1, -1, 0, 0};
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = x + dxs[d];
+                        i32 ny = y + dys[d];
+                        if (self.is_valid(nx, ny)) {
+                            if (self.grid[nx][ny] == ai_color) {
+                                has_my = 1;
+                            }
+                            if (self.grid[nx][ny] == opp) {
+                                has_opp = 1;
+                            }
+                        }
+                    }
+                    my_libs = my_libs + has_my;
+                    opp_libs = opp_libs + has_opp;
+                }
+            }
+        }
+        i32 cap_diff = 0;
+        if (ai_color == 1) {
+            cap_diff = self.black_captures - self.white_captures;
+        } else {
+            cap_diff = self.white_captures - self.black_captures;
+        }
+        // capture is the victory currency: stone diff dominates
+        return (my_stones - opp_stones) * 100 + (my_libs - opp_libs) * 8 + cap_diff * 100;
+    }
+
+    // Alpha-beta minimax over the current position. Depth 0 returns the
+    // static evaluation. Captures inside the search REALLY remove stones
+    // (via remove_group); each node restores the grid from a snapshot
+    // taken at entry, so the caller sees an unchanged board.
+    // Params are immutable in Hust: alpha/beta are rebound to locals.
+    public i32 minimax(i32 depth, i32 color_to_move, i32 ai_color, i32 alpha_in, i32 beta_in) {
+        i32 alpha = alpha_in;
+        i32 beta = beta_in;
+        if (depth == 0) {
+            return self.evaluate_for(ai_color);
+        }
+        // entry snapshot (restored after EVERY candidate)
+        i32[13][13] snap = {0};
+        for (i32 i = 0; i < 13; i++) {
+            for (i32 j = 0; j < 13; j++) {
+                snap[i][j] = self.grid[i][j];
+            }
+        }
+        bool maximizing = color_to_move == ai_color;
+        i32 best = 999999;
+        if (maximizing) {
+            best = -999999;
+        }
+        bool any_move = false;
+        i32 opp = self.opponent(color_to_move);
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (self.grid[x][y] == 0) {
+                    self.grid[x][y] = color_to_move;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = x + dxs[d];
+                        i32 ny = y + dys[d];
+                        if (self.is_valid(nx, ny)) {
+                            if (self.grid[nx][ny] == opp) {
+                                if (self.count_liberties(nx, ny) == 0) {
+                                    self.remove_group(nx, ny);
+                                }
+                            }
+                        }
+                    }
+                    any_move = true;
+                    i32 val = self.minimax(depth - 1, opp, ai_color, alpha, beta);
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            self.grid[i][j] = snap[i][j];
+                        }
+                    }
+                    if (maximizing) {
+                        if (val > best) {
+                            best = val;
+                        }
+                        if (best > alpha) {
+                            alpha = best;
+                        }
+                    } else {
+                        if (val < best) {
+                            best = val;
+                        }
+                        if (best < beta) {
+                            beta = best;
+                        }
+                    }
+                    if (beta <= alpha) {
+                        return best;
+                    }
+                }
+            }
+        }
+        if (!any_move) {
+            best = self.evaluate_for(ai_color);
+        }
+        return best;
+    }
 }

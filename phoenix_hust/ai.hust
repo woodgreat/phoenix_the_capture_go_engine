@@ -108,3 +108,199 @@ public class Level1 implements MoveGenerator {
 public i32 create_ai(i32 requested_level) {
     return 1;
 }
+
+// Level 3: heuristic greedy - capture bonus, atari pressure, liberties,
+// adjacency, center preference. Single ply, best score wins (ties: first).
+public class Level3 implements MoveGenerator {
+    i32 last_x;
+    i32 last_y;
+
+    public Level3() {
+        self.last_x = -1;
+        self.last_y = -1;
+    }
+
+    public i32 last_x() {
+        return self.last_x;
+    }
+
+    public i32 last_y() {
+        return self.last_y;
+    }
+
+    public Board genmove(Board board, i32 color) {
+        Board b2 = board;
+        i32 opp = b2.opponent(color);
+        i32 best_enc = -1;
+        i32 best_score = -1000000;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (b2.get(x, y) == 0) {
+                    bool is_ko = b2.is_ko_point(x, y);
+                    // virtual placement
+                    b2.set(x, y, color);
+                    i32 cap = 0;
+                    i32 atari = 0;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = x + dxs[d];
+                        i32 ny = y + dys[d];
+                        if (b2.is_valid(nx, ny)) {
+                            if (b2.get(nx, ny) == opp) {
+                                i32 l = b2.count_liberties(nx, ny);
+                                if (l == 0) {
+                                    cap = cap + 1;
+                                } else if (l == 1) {
+                                    atari = atari + 1;
+                                }
+                            }
+                        }
+                    }
+                    bool alive = b2.count_liberties(x, y) > 0;
+                    i32 self_libs = b2.count_liberties(x, y);
+                    b2.set(x, y, 0);
+                    // legality filter
+                    bool legal = true;
+                    if (!alive && cap == 0) {
+                        legal = false;
+                    }
+                    if (is_ko && cap == 1) {
+                        legal = false;
+                    }
+                    if (legal) {
+                        i32 score = cap * 1000 + atari * 60 + self_libs * 8;
+                        i32 neighbors = 0;
+                        for (i32 d = 0; d < 4; d++) {
+                            i32 nx = x + dxs[d];
+                            i32 ny = y + dys[d];
+                            if (b2.is_valid(nx, ny)) {
+                                if (b2.get(nx, ny) != 0) {
+                                    neighbors = neighbors + 1;
+                                }
+                            }
+                        }
+                        score = score + neighbors * 4;
+                        i32 dist = x - 6;
+                        if (dist < 0) {
+                            dist = -dist;
+                        }
+                        i32 dy2 = y - 6;
+                        if (dy2 < 0) {
+                            dy2 = -dy2;
+                        }
+                        score = score + (12 - dist - dy2) * 2;
+                        if (score > best_score) {
+                            best_score = score;
+                            best_enc = x * 13 + y;
+                        }
+                    }
+                }
+            }
+        }
+        if (best_enc < 0) {
+            self.last_x = -1;
+            self.last_y = -1;
+            return b2;
+        }
+        i32 mx = best_enc / 13;
+        i32 my = best_enc - mx * 13;
+        i32 r = b2.place_stone(mx, my, color);
+        if (r >= 0) {
+            self.last_x = mx;
+            self.last_y = my;
+        } else {
+            self.last_x = -1;
+            self.last_y = -1;
+        }
+        return b2;
+    }
+}
+
+// Level 5: alpha-beta search (root + 2-ply minimax on the Board).
+// Root candidates: every legal empty point (virtual check, suicide and
+// ko excluded). For each, snapshot -> place + real removal of captured
+// groups -> minimax(depth 2) -> restore. Best value wins.
+public class Level5 implements MoveGenerator {
+    i32 last_x;
+    i32 last_y;
+
+    public Level5() {
+        self.last_x = -1;
+        self.last_y = -1;
+    }
+
+    public i32 last_x() {
+        return self.last_x;
+    }
+
+    public i32 last_y() {
+        return self.last_y;
+    }
+
+    public Board genmove(Board board, i32 color) {
+        Board b2 = board;
+        i32 opp = b2.opponent(color);
+        i32 best_enc = -1;
+        i32 best_val = -999999;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (b2.get(x, y) == 0) {
+                    bool is_ko = b2.is_ko_point(x, y);
+                    // snapshot before this root candidate
+                    i32[13][13] snap = {0};
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            snap[i][j] = b2.get(i, j);
+                        }
+                    }
+                    b2.set(x, y, color);
+                    i32 cap = 0;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = x + dxs[d];
+                        i32 ny = y + dys[d];
+                        if (b2.is_valid(nx, ny)) {
+                            if (b2.get(nx, ny) == opp) {
+                                if (b2.count_liberties(nx, ny) == 0) {
+                                    cap = cap + b2.remove_group(nx, ny);
+                                }
+                            }
+                        }
+                    }
+                    bool alive = b2.count_liberties(x, y) > 0;
+                    i32 val = -999999;
+                    if (alive && !(is_ko && cap == 1)) {
+                        val = b2.minimax(2, opp, color, -999999, 999999);
+                    }
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            b2.set(i, j, snap[i][j]);
+                        }
+                    }
+                    if (val > best_val) {
+                        best_val = val;
+                        best_enc = x * 13 + y;
+                    }
+                }
+            }
+        }
+        if (best_enc < 0) {
+            self.last_x = -1;
+            self.last_y = -1;
+            return b2;
+        }
+        i32 mx = best_enc / 13;
+        i32 my = best_enc - mx * 13;
+        i32 r = b2.place_stone(mx, my, color);
+        if (r >= 0) {
+            self.last_x = mx;
+            self.last_y = my;
+        } else {
+            self.last_x = -1;
+            self.last_y = -1;
+        }
+        return b2;
+    }
+}

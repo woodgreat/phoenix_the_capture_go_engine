@@ -1,0 +1,44 @@
+// probe v8 - r45 interface variable, 3 blanks (return, board, color)
+
+interface MoveGenerator {
+    public genmove(board, color);
+}
+
+class FakeBoard {
+    i32 v;
+
+    public i32 get() {
+        return self.v;
+    }
+
+    public void set(i32 x) {
+        self.v = x;
+    }
+}
+
+class Level1 implements MoveGenerator {
+    public FakeBoard genmove(FakeBoard board, i32 color) {
+        FakeBoard b2 = board;
+        b2.set(11);
+        return b2;
+    }
+}
+
+class Level5 implements MoveGenerator {
+    public FakeBoard genmove(FakeBoard board, i32 color) {
+        FakeBoard b2 = board;
+        b2.set(55);
+        return b2;
+    }
+}
+
+void main() {
+    MoveGenerator(FakeBoard, FakeBoard, i32) ai = new Level1();
+    FakeBoard b = new FakeBoard();
+    b = ai.genmove(b, 1);
+    println!("level1 -> {} (expect 11)", b.get());
+    ai = new Level5();
+    b = ai.genmove(b, 2);
+    println!("level5 -> {} (expect 55)", b.get());
+    println!("PROBE-END");
+}
