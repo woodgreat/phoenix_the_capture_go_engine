@@ -1,10 +1,60 @@
 // Phoenix - Wood Capture Go Engine
-// Entry point (Step 1: minimal skeleton, verifies project mode)
+// Entry point (Step 2: board + twist-cross verification)
 
 use board;
 
 void main() {
     Board b = new Board();
+    b.setup_twist_cross();
+
     println!("Phoenix Wood Capture Go Engine v0.1.0");
-    println!("Board created, center (6,6) = {}", b.get(6, 6));
+    println!("");
+
+    // Verify twist-cross opening stones
+    println!("Twist-cross stone check:");
+    i32 g7 = b.get(6, 6);
+    i32 g8 = b.get(6, 7);
+    i32 h7 = b.get(7, 6);
+    i32 h8 = b.get(7, 7);
+    println!("  G7 (6,6) = {} (expect 1 = black)", g7);
+    println!("  G8 (6,7) = {} (expect 2 = white)", g8);
+    println!("  H7 (7,6) = {} (expect 2 = white)", h7);
+    println!("  H8 (7,7) = {} (expect 1 = black)", h8);
+    bool stones_ok = g7 == 1 && g8 == 2 && h7 == 2 && h8 == 1;
+    println!("  twist-cross OK: {}", stones_ok);
+    println!("");
+
+    // Verify showboard-style output
+    println!("showboard:");
+    b.print_board();
+    println!("");
+
+    // Verify empty/board checks
+    bool c1 = b.is_empty(0, 0);
+    bool c2 = b.is_empty(6, 6);
+    bool c3 = b.is_valid(13, 0);
+    bool c4 = b.is_valid(-1, 5);
+    println!("is_empty(0,0)={} (expect true)", c1);
+    println!("is_empty(6,6)={} (expect false, stone there)", c2);
+    println!("is_valid(13,0)={} (expect false)", c3);
+    println!("is_valid(-1,5)={} (expect false)", c4);
+    println!("");
+
+    // Verify basic placement rules
+    bool p1 = b.place_stone(3, 3, 1);
+    bool p2 = b.place_stone(3, 3, 2);
+    bool p3 = b.place_stone(13, 0, 1);
+    bool p4 = b.place_stone(0, 0, 2);
+    println!("place D4 black: {} (expect true)", p1);
+    println!("place D4 again: {} (expect false, occupied)", p2);
+    println!("place x=13: {} (expect false, out of range)", p3);
+    println!("place A1 white: {} (expect true)", p4);
+    println!("move_count = {} (expect 2)", b.move_count);
+    println!("");
+
+    // Verify captures counters and clear()
+    println!("captures: black={} white={} (expect 0 0)", b.black_captures, b.white_captures);
+    b.clear();
+    bool after_clear = b.is_empty(3, 3) && b.get(6, 6) == 1;
+    println!("after clear(): D4 empty and G7 black again: {} (expect true)", after_clear);
 }

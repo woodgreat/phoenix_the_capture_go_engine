@@ -1,23 +1,140 @@
-// board.hust - 13x13 board representation
-// Step 1: minimal skeleton (full logic in Step 2)
+// board.hust - 13x13 board representation with twist-cross opening
+// Step 2: full board logic (liberties/captures/ko come in Step 4-5)
+//
+// Internal coordinates:
+//   x = column (0=A, 1=B, ..., 7=H, 8=J, ..., 12=M; letter I skipped)
+//   y = row - 1 (0 = row 1, ..., 12 = row 13)
+//
+// Stone codes: 0 = empty, 1 = black, 2 = white
 
 public class Board {
-    // 0 = empty, 1 = black, 2 = white
     i32[13][13] grid;
 
+    // Capture counters (victory: black 6, white 5)
+    i32 black_captures;
+    i32 white_captures;
+
+    // Move counter (placement moves only, opening setup not counted)
+    i32 move_count;
+
+    // Constructor: scalar fields only.
+    // IMPORTANT (Hust transpiler limitation): the ctor body only supports
+    // direct field assignments (self.field = value). Method calls and loops
+    // inside the ctor are silently dropped (translator.rs extracts
+    // `self.field = value;` patterns only). Board setup must be done by
+    // calling setup_twist_cross() explicitly after new.
     public Board() {
+        self.black_captures = 0;
+        self.white_captures = 0;
+        self.move_count = 0;
+    }
+
+    // Reset board to the mandatory twist-cross opening position
+    public void clear() {
+        self.black_captures = 0;
+        self.white_captures = 0;
+        self.move_count = 0;
         for (i32 i = 0; i < 13; i++) {
             for (i32 j = 0; j < 13; j++) {
                 self.grid[i][j] = 0;
             }
         }
+        self.setup_twist_cross();
     }
 
-    // Get color at (x, y); -1 if out of range
-    public i32 get(i32 x, i32 y) {
-        if (x >= 0 && x < 13 && y >= 0 && y < 13) {
-            return self.grid[x][y];
+    // Mandatory twist-cross opening (mutual cut, 2x2 block at center):
+    //   Black: G7 (6,6) and H8 (7,7)   - main diagonal
+    //   White: G8 (6,7) and H7 (7,6)   - anti diagonal
+    public void setup_twist_cross() {
+        self.grid[6][6] = 1;
+        self.grid[6][7] = 2;
+        self.grid[7][6] = 2;
+        self.grid[7][7] = 1;
+    }
+
+    // Coordinate in range check
+    public bool is_valid(i32 x, i32 y) {
+        return x >= 0 && x < 13 && y >= 0 && y < 13;
+    }
+
+    // Empty point check (out of range counts as not empty)
+    public bool is_empty(i32 x, i32 y) {
+        if (!self.is_valid(x, y)) {
+            return false;
         }
-        return -1;
+        return self.grid[x][y] == 0;
+    }
+
+    // Get stone color at (x, y); -1 if out of range
+    public i32 get(i32 x, i32 y) {
+        if (!self.is_valid(x, y)) {
+            return -1;
+        }
+        return self.grid[x][y];
+    }
+
+    // Set color directly (for rules/AI internals, no counter updates)
+    public void set(i32 x, i32 y, i32 val) {
+        if (self.is_valid(x, y)) {
+            self.grid[x][y] = val;
+        }
+    }
+
+    // Basic placement: occupied/range check only.
+    // Capture detection, suicide and ko rules are added in Step 4-5.
+    // Returns true on success.
+    public bool place_stone(i32 x, i32 y, i32 color) {
+        if (!self.is_valid(x, y)) {
+            return false;
+        }
+        if (!self.is_empty(x, y)) {
+            return false;
+        }
+        self.grid[x][y] = color;
+        self.move_count = self.move_count + 1;
+        return true;
+    }
+
+    // Captured-stone count for a side (1 = black, 2 = white)
+    public i32 get_captures(i32 color) {
+        if (color == 1) {
+            return self.black_captures;
+        }
+        if (color == 2) {
+            return self.white_captures;
+        }
+        return 0;
+    }
+
+    // Opponent color: 1 -> 2, 2 -> 1
+    public i32 opponent(i32 color) {
+        if (color == 1) {
+            return 2;
+        }
+        return 1;
+    }
+
+    // Print board in GTP showboard style:
+    //   header line with column letters (A..M, no I), rows 13 down to 1
+    //   B = black, W = white, . = empty
+    public void print_board() {
+        print!("   A B C D E F G H J K L M N\n");
+        for (i32 y = 12; y >= 0; y--) {
+            i32 row_num = y + 1;
+            if (row_num < 10) {
+                print!(" ");
+            }
+            print!("{} ", row_num);
+            for (i32 x = 0; x < 13; x++) {
+                if (self.grid[x][y] == 0) {
+                    print!(". ");
+                } else if (self.grid[x][y] == 1) {
+                    print!("B ");
+                } else {
+                    print!("W ");
+                }
+            }
+            print!("\n");
+        }
     }
 }
