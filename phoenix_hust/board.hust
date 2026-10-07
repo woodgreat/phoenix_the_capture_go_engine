@@ -114,11 +114,11 @@ public class Board {
         return 1;
     }
 
-    // Print board in GTP showboard style:
-    //   header line with column letters (A..M, no I), rows 13 down to 1
-    //   B = black, W = white, . = empty
+    // Print board in showboard style:
+    //   header line with column letters A..M (continuous, no I/O skip),
+    //   rows 13 down to 1; B = black, W = white, . = empty
     public void print_board() {
-        print!("   A B C D E F G H J K L M N\n");
+        print!("   A B C D E F G H I J K L M\n");
         for (i32 y = 12; y >= 0; y--) {
             i32 row_num = y + 1;
             if (row_num < 10) {
