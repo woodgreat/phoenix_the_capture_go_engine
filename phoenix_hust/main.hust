@@ -1,21 +1,21 @@
 // Phoenix - Wood Capture Go Engine
 // Step 7: GTP main loop
+// Step 8: complete command set (undo, known_command, list_commands,
+//         final_score, fixed_handicap, wood_* extensions, ID echo)
 //
 // GTP v2 protocol over stdin/stdout:
 //   request : [id] command args...
 //   response: = result\n\n  (success)  |  ? error\n\n  (failure)
+//   the optional numeric id is echoed as =<id> / ?<id>
 //
 // IO (verified in io_probe experiment, Hust 0.1.35):
-//   - read line (EOF-safe): std::io::stdin().lines().next()
-//       .unwrap_or(Ok(String::new())).unwrap()
-//     newline is stripped by lines(); EOF yields an empty string
-//   - flush (MANDATORY after every response, stdout is block-buffered
-//     on pipes): std::io::Write::flush(&mut std::io::stdout())
+//   read line (EOF-safe): std::io::stdin().lines().next()
+//     .unwrap_or(Ok(String::new())).unwrap()
+//   flush (MANDATORY): std::io::Write::flush(&mut std::io::stdout())
 //
-// Command dispatch is INLINED in the main loop: the transpiler does
-// not accept class-typed function definitions/returns (Board in/out
-// would be silently passed through), so handle_command() as a free
-// function is not possible. Ownership stays with main's `b`.
+// Undo history: dynamic arrays in main act as a stack of full board
+// snapshots (169 cells + 5 meta values per move). The board object
+// moves nowhere; snapshots go in and out through get/set.
 
 use board;
 use gtp;
@@ -24,12 +24,15 @@ void main() {
     Board b = new Board();
     b.setup_twist_cross();
 
+    // Undo history stack: one snapshot per successful placement
+    i32[] hist_cells;   // 169 values per snapshot (x*13+y order)
+    i32[] hist_meta;    // 5 values per snapshot: bc, wc, ko_x, ko_y, moves
+    i32 ai_level = 1;   // wired to real AI in Step 9
+
     i32 empty_streak = 0;
     while (true) {
         String line = std::io::stdin().lines().next().unwrap_or(Ok(String::new())).unwrap();
 
-        // Blank lines are ignored per GTP, but EOF also yields empty
-        // strings forever: 3 blanks in a row -> input closed -> quit
         if (line.len() == 0) {
             empty_streak = empty_streak + 1;
             if (empty_streak >= 3) {
@@ -39,8 +42,7 @@ void main() {
         }
         empty_streak = 0;
 
-        // Tokenize: cmd a1 a2 (extra whitespace tolerated; GTP command
-        // IDs are parsed in Step 8)
+        // Tokenize: cmd a1 a2
         String cmd = "";
         String a1 = "";
         String a2 = "";
@@ -64,36 +66,108 @@ void main() {
             }
         }
 
+        // GTP numeric command id echo: "5 name" -> "=5 Wood Capture Go"
+        String p = " ";
+        bool all_digits = cmd.len() > 0;
+        for (i32 i = 0; i < cmd.len(); i++) {
+            char ch = cmd.chars().nth((usize)i).unwrap();
+            if (ch < '0' || ch > '9') {
+                all_digits = false;
+            }
+        }
+        if (all_digits) {
+            p = format!("{} ", cmd.clone());
+            cmd = a1.clone();
+            a1 = a2.clone();
+            a2 = "".to_string();
+        }
+
         if (cmd == "quit") {
-            println!("=");
+            println!("={}", p);
             println!("");
             std::io::Write::flush(&mut std::io::stdout());
             break;
         } else if (cmd == "protocol_version") {
-            println!("= 2");
+            println!("={}2", p);
         } else if (cmd == "name") {
-            println!("= Wood Capture Go");
+            println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("= 0.1.0.20261007170717");
+            println!("={}0.1.0.20261007170717", p);
+        } else if (cmd == "known_command") {
+            String k = "false";
+            if (a1 == "protocol_version" || a1 == "name" || a1 == "version"
+                || a1 == "known_command" || a1 == "list_commands" || a1 == "quit"
+                || a1 == "boardsize" || a1 == "clear_board" || a1 == "komi"
+                || a1 == "play" || a1 == "genmove" || a1 == "showboard"
+                || a1 == "undo" || a1 == "final_score" || a1 == "fixed_handicap"
+                || a1 == "wood_captures" || a1 == "wood_target"
+                || a1 == "wood_game_over" || a1 == "wood_rules"
+                || a1 == "wood_ai_level") {
+                k = "true";
+            }
+            println!("={}{}", p, k);
+        } else if (cmd == "list_commands") {
+            println!("={}protocol_version", p);
+            println!("name");
+            println!("version");
+            println!("known_command");
+            println!("list_commands");
+            println!("quit");
+            println!("boardsize");
+            println!("clear_board");
+            println!("komi");
+            println!("play");
+            println!("genmove");
+            println!("showboard");
+            println!("undo");
+            println!("final_score");
+            println!("fixed_handicap");
+            println!("wood_captures");
+            println!("wood_target");
+            println!("wood_game_over");
+            println!("wood_rules");
+            println!("wood_ai_level");
         } else if (cmd == "boardsize") {
             i32 n = str_to_i32(a1.clone());
             if (n == 13) {
-                println!("=");
+                println!("={}", p);
             } else {
-                println!("? unacceptable size");
+                println!("?{}unacceptable size", p);
             }
         } else if (cmd == "clear_board") {
             b.clear();
-            println!("=");
+            hist_cells.clear();
+            hist_meta.clear();
+            println!("={}", p);
         } else if (cmd == "komi") {
             // Wood Capture Go has no komi; only 0 is acceptable
             if (a1 == "0" || a1 == "0.0" || a1 == "0.00" || a1 == "0.000") {
-                println!("=");
+                println!("={}", p);
             } else {
-                println!("? unacceptable komi");
+                println!("?{}unacceptable komi", p);
+            }
+        } else if (cmd == "fixed_handicap") {
+            // 0 = empty board without stones, 2 = twist-cross setup
+            i32 n = str_to_i32(a1.clone());
+            if (n == 0) {
+                b.clear();
+                b.set(6, 6, 0);
+                b.set(6, 7, 0);
+                b.set(7, 6, 0);
+                b.set(7, 7, 0);
+                hist_cells.clear();
+                hist_meta.clear();
+                println!("={}", p);
+            } else if (n == 2) {
+                b.clear();
+                hist_cells.clear();
+                hist_meta.clear();
+                println!("={}", p);
+            } else {
+                println!("?{}unacceptable handicap", p);
             }
         } else if (cmd == "showboard") {
-            println!("=");
+            println!("={}", p);
             b.print_board();
         } else if (cmd == "play") {
             // play <color> <coord|pass|resign>
@@ -104,32 +178,117 @@ void main() {
                 color = 2;
             }
             if (color == 0) {
-                println!("? invalid color");
+                println!("?{}invalid color", p);
             } else if (a2 == "pass" || a2 == "resign") {
-                println!("=");
+                println!("={}", p);
             } else {
                 i32 x = gtp_coord_to_x(a2.clone());
                 i32 y = gtp_coord_to_y(a2.clone());
                 if (x < 0 || y < 0) {
-                    println!("? invalid coordinate");
+                    println!("?{}invalid coordinate", p);
                 } else {
+                    // snapshot BEFORE the move: undo restores the state
+                    // as it was prior to the last placement
+                    for (i32 sx = 0; sx < 13; sx++) {
+                        for (i32 sy = 0; sy < 13; sy++) {
+                            hist_cells.push(b.get(sx, sy));
+                        }
+                    }
+                    hist_meta.push(b.black_captures);
+                    hist_meta.push(b.white_captures);
+                    hist_meta.push(b.ko_x);
+                    hist_meta.push(b.ko_y);
+                    hist_meta.push(b.move_count);
                     i32 r = b.place_stone(x, y, color);
                     if (r >= 0) {
-                        println!("=");
-                    } else if (r == -2) {
-                        println!("? illegal move (suicide)");
-                    } else if (r == -3) {
-                        println!("? illegal move (ko)");
+                        println!("={}", p);
                     } else {
-                        println!("? illegal move");
+                        // rejected: place_stone rolled back internally,
+                        // just drop the snapshot
+                        i32 cbase = (i32)hist_cells.len() - 169;
+                        hist_cells.truncate((usize)cbase);
+                        i32 mbase2 = (i32)hist_meta.len() - 5;
+                        hist_meta.truncate((usize)mbase2);
+                        if (r == -2) {
+                            println!("?{}illegal move (suicide)", p);
+                        } else if (r == -3) {
+                            println!("?{}illegal move (ko)", p);
+                        } else {
+                            println!("?{}illegal move", p);
+                        }
                     }
                 }
             }
+        } else if (cmd == "undo") {
+            if (hist_meta.len() >= 5) {
+                i32 mbase = (i32)hist_meta.len() - 5;
+                i32 m_bc = hist_meta[mbase];
+                i32 m_wc = hist_meta[mbase + 1];
+                i32 m_kx = hist_meta[mbase + 2];
+                i32 m_ky = hist_meta[mbase + 3];
+                i32 m_mc = hist_meta[mbase + 4];
+                hist_meta.truncate((usize)mbase);
+                i32 cbase = (i32)hist_cells.len() - 169;
+                for (i32 x = 0; x < 13; x++) {
+                    for (i32 y = 0; y < 13; y++) {
+                        i32 ci = cbase + x * 13 + y;
+                        i32 v = hist_cells[ci];
+                        b.set(x, y, v);
+                    }
+                }
+                hist_cells.truncate((usize)cbase);
+                b.set_captures(1, m_bc);
+                b.set_captures(2, m_wc);
+                b.set_ko(m_kx, m_ky);
+                b.set_move_count(m_mc);
+                println!("={}", p);
+            } else {
+                println!("?{}cannot undo", p);
+            }
+        } else if (cmd == "final_score") {
+            String s = format_final_score(b.black_captures, b.white_captures);
+            println!("={}{}", p, s.clone());
+        } else if (cmd == "wood_captures") {
+            println!("={}black={} white={}", p, b.black_captures, b.white_captures);
+        } else if (cmd == "wood_target") {
+            println!("={}black_target=6 white_target=5", p);
+        } else if (cmd == "wood_game_over") {
+            i32 empties = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b.get(x, y) == 0) {
+                        empties = empties + 1;
+                    }
+                }
+            }
+            if (b.black_captures >= 6) {
+                println!("={}1 B", p);
+            } else if (b.white_captures >= 5) {
+                println!("={}1 W", p);
+            } else if (empties == 0) {
+                if (b.black_captures > b.white_captures) {
+                    println!("={}2 B", p);
+                } else {
+                    println!("={}2 W", p);
+                }
+            } else {
+                println!("={}0", p);
+            }
+        } else if (cmd == "wood_rules") {
+            println!("={}Wood Capture Go Rules v1.0 (2026-09-13)", p);
+        } else if (cmd == "wood_ai_level") {
+            i32 lv = str_to_i32(a1.clone());
+            if (lv >= 1 && lv <= 10) {
+                ai_level = lv;
+                println!("={}", p);
+            } else {
+                println!("?{}unacceptable level", p);
+            }
         } else if (cmd == "genmove") {
             // Placeholder until the Step 9 AI lands: always pass
-            println!("= pass");
+            println!("={}pass", p);
         } else {
-            println!("? unknown command");
+            println!("?{}unknown command", p);
         }
 
         println!("");

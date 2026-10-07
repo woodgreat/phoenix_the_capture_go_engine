@@ -329,4 +329,26 @@ public class Board {
             print!("\n");
         }
     }
+
+    // === Setters for undo restore (history lives in the GTP layer) ===
+
+    // Overwrite a capture counter (1 = black, 2 = white)
+    public void set_captures(i32 color, i32 n) {
+        if (color == 1) {
+            self.black_captures = n;
+        } else {
+            self.white_captures = n;
+        }
+    }
+
+    // Restore the ko point
+    public void set_ko(i32 kx, i32 ky) {
+        self.ko_x = kx;
+        self.ko_y = ky;
+    }
+
+    // Restore the move counter
+    public void set_move_count(i32 n) {
+        self.move_count = n;
+    }
 }
