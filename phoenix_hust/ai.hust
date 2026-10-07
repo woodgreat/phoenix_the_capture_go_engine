@@ -304,3 +304,189 @@ public class Level5 implements MoveGenerator {
         return b2;
     }
 }
+
+// Level 7: iterative deepening (depth 2..5) + node budget + endgame
+// pass policy (few empty points and no capture candidate -> pass, so
+// games can reach a decision within ~200 moves).
+public class Level7 implements MoveGenerator {
+    i32 last_x;
+    i32 last_y;
+
+    public Level7() {
+        self.last_x = -1;
+        self.last_y = -1;
+    }
+
+    public i32 last_x() {
+        return self.last_x;
+    }
+
+    public i32 last_y() {
+        return self.last_y;
+    }
+
+    public Board genmove(Board board, i32 color) {
+        Board b2 = board;
+        i32 opp = b2.opponent(color);
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        // iterative deepening: 2..5 ply
+        i32 best_enc = -1;
+        for (i32 dd = 2; dd <= 5; dd++) {
+            best_enc = -1;
+            i32 best_val = -999999;
+            b2.start_search(300000);
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        bool is_ko = b2.is_ko_point(x, y);
+                        i32[13][13] snap = {0};
+                        for (i32 i = 0; i < 13; i++) {
+                            for (i32 j = 0; j < 13; j++) {
+                                snap[i][j] = b2.get(i, j);
+                            }
+                        }
+                        b2.set(x, y, color);
+                        i32 cap = 0;
+                        for (i32 d = 0; d < 4; d++) {
+                            i32 nx = x + dxs[d];
+                            i32 ny = y + dys[d];
+                            if (b2.is_valid(nx, ny)) {
+                                if (b2.get(nx, ny) == opp) {
+                                    if (b2.count_liberties(nx, ny) == 0) {
+                                        cap = cap + b2.remove_group(nx, ny);
+                                    }
+                                }
+                            }
+                        }
+                        bool alive = b2.count_liberties(x, y) > 0;
+                        i32 val = -999999;
+                        if (alive && !(is_ko && cap == 1)) {
+                            val = b2.minimax(dd - 1, opp, color, -999999, 999999);
+                        }
+                        for (i32 i = 0; i < 13; i++) {
+                            for (i32 j = 0; j < 13; j++) {
+                                b2.set(i, j, snap[i][j]);
+                            }
+                        }
+                        if (val > best_val) {
+                            best_val = val;
+                            best_enc = x * 13 + y;
+                        }
+                    }
+                }
+            }
+            if (b2.search_nodes > b2.search_budget) {
+                break;
+            }
+        }
+        if (best_enc < 0) {
+            self.last_x = -1;
+            self.last_y = -1;
+            return b2;
+        }
+        i32 mx = best_enc / 13;
+        i32 my = best_enc - mx * 13;
+        i32 r = b2.place_stone(mx, my, color);
+        if (r >= 0) {
+            self.last_x = mx;
+            self.last_y = my;
+        } else {
+            self.last_x = -1;
+            self.last_y = -1;
+        }
+        return b2;
+    }
+}
+
+// Level 10: same engine as Level 7 with deeper iteration (2..7) and a
+// larger node budget.
+public class Level10 implements MoveGenerator {
+    i32 last_x;
+    i32 last_y;
+
+    public Level10() {
+        self.last_x = -1;
+        self.last_y = -1;
+    }
+
+    public i32 last_x() {
+        return self.last_x;
+    }
+
+    public i32 last_y() {
+        return self.last_y;
+    }
+
+    public Board genmove(Board board, i32 color) {
+        Board b2 = board;
+        i32 opp = b2.opponent(color);
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        i32 best_enc = -1;
+        for (i32 dd = 2; dd <= 7; dd++) {
+            best_enc = -1;
+            i32 best_val = -999999;
+            b2.start_search(1000000);
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        bool is_ko = b2.is_ko_point(x, y);
+                        i32[13][13] snap = {0};
+                        for (i32 i = 0; i < 13; i++) {
+                            for (i32 j = 0; j < 13; j++) {
+                                snap[i][j] = b2.get(i, j);
+                            }
+                        }
+                        b2.set(x, y, color);
+                        i32 cap = 0;
+                        for (i32 d = 0; d < 4; d++) {
+                            i32 nx = x + dxs[d];
+                            i32 ny = y + dys[d];
+                            if (b2.is_valid(nx, ny)) {
+                                if (b2.get(nx, ny) == opp) {
+                                    if (b2.count_liberties(nx, ny) == 0) {
+                                        cap = cap + b2.remove_group(nx, ny);
+                                    }
+                                }
+                            }
+                        }
+                        bool alive = b2.count_liberties(x, y) > 0;
+                        i32 val = -999999;
+                        if (alive && !(is_ko && cap == 1)) {
+                            val = b2.minimax(dd - 1, opp, color, -999999, 999999);
+                        }
+                        for (i32 i = 0; i < 13; i++) {
+                            for (i32 j = 0; j < 13; j++) {
+                                b2.set(i, j, snap[i][j]);
+                            }
+                        }
+                        if (val > best_val) {
+                            best_val = val;
+                            best_enc = x * 13 + y;
+                        }
+                    }
+                }
+            }
+            if (b2.search_nodes > b2.search_budget) {
+                break;
+            }
+        }
+        if (best_enc < 0) {
+            self.last_x = -1;
+            self.last_y = -1;
+            return b2;
+        }
+        i32 mx = best_enc / 13;
+        i32 my = best_enc - mx * 13;
+        i32 r = b2.place_stone(mx, my, color);
+        if (r >= 0) {
+            self.last_x = mx;
+            self.last_y = my;
+        } else {
+            self.last_x = -1;
+            self.last_y = -1;
+        }
+        return b2;
+    }
+}

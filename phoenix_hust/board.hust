@@ -20,6 +20,11 @@ public class Board {
     // Pseudo-random seed for AI move selection (LCG)
     i32 rng_seed;
 
+    // Search node budget (Step 12): minimax counts visited nodes and
+    // bails out to the static evaluation once the budget is spent.
+    i32 search_nodes;
+    i32 search_budget;
+
     // Simple ko: point of the last single-stone capture (-1 = no ko).
     // The side to move may not capture exactly one stone at this point
     // (immediate recapture would repeat the position).
@@ -39,6 +44,8 @@ public class Board {
         self.ko_x = -1;
         self.ko_y = -1;
         self.rng_seed = 88675123;
+        self.search_nodes = 0;
+        self.search_budget = 300000;
     }
 
     // Reset board to the mandatory twist-cross opening position
@@ -356,6 +363,13 @@ public class Board {
         self.move_count = n;
     }
 
+    // Reset the search node counter and set the budget (called by the
+    // AI layer before starting a new search)
+    public void start_search(i32 budget) {
+        self.search_nodes = 0;
+        self.search_budget = budget;
+    }
+
     // Ko-point query for the AI layer (ko_x/ko_y stay private)
     public bool is_ko_point(i32 x, i32 y) {
         return x == self.ko_x && y == self.ko_y;
@@ -438,7 +452,8 @@ public class Board {
     public i32 minimax(i32 depth, i32 color_to_move, i32 ai_color, i32 alpha_in, i32 beta_in) {
         i32 alpha = alpha_in;
         i32 beta = beta_in;
-        if (depth == 0) {
+        self.search_nodes = self.search_nodes + 1;
+        if (depth == 0 || self.search_nodes > self.search_budget) {
             return self.evaluate_for(ai_color);
         }
         // entry snapshot (restored after EVERY candidate)

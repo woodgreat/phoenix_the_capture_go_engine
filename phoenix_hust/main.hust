@@ -33,6 +33,8 @@ void main() {
     Level1 l1 = new Level1();
     Level3 l3 = new Level3();
     Level5 l5 = new Level5();
+    Level7 l7 = new Level7();
+    Level10 l10 = new Level10();
 
     i32 empty_streak = 0;
     while (true) {
@@ -184,8 +186,11 @@ void main() {
             }
             if (color == 0) {
                 println!("?{}invalid color", p);
-            } else if (a2 == "pass" || a2 == "resign") {
+            } else if (a2 == "resign") {
                 println!("={}", p);
+            } else if (a2 == "pass") {
+                // RULE: Wood Capture Go has no pass move
+                println!("?{}pass is not allowed", p);
             } else {
                 i32 x = gtp_coord_to_x(a2.clone());
                 i32 y = gtp_coord_to_y(a2.clone());
@@ -314,7 +319,15 @@ void main() {
                 // dispatch through the interface variable by level
                 i32 lx = -1;
                 i32 ly = -1;
-                if (ai_level >= 5) {
+                if (ai_level >= 9) {
+                    b = l10.genmove(b, color);
+                    lx = l10.last_x();
+                    ly = l10.last_y();
+                } else if (ai_level >= 7) {
+                    b = l7.genmove(b, color);
+                    lx = l7.last_x();
+                    ly = l7.last_y();
+                } else if (ai_level >= 5) {
                     b = l5.genmove(b, color);
                     lx = l5.last_x();
                     ly = l5.last_y();
