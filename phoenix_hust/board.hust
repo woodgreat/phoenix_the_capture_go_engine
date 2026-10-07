@@ -2,7 +2,7 @@
 // Step 2: full board logic (liberties/captures/ko come in Step 4-5)
 //
 // Internal coordinates:
-//   x = column (0=A, 1=B, ..., 7=H, 8=J, ..., 12=M; letter I skipped)
+//   x = column (0=A, 1=B, ..., 12=M; letters A-M continuous, no I/O skip)
 //   y = row - 1 (0 = row 1, ..., 12 = row 13)
 //
 // Stone codes: 0 = empty, 1 = black, 2 = white
@@ -83,7 +83,7 @@ public class Board {
     // Basic placement: occupied/range check only.
     // Capture detection, suicide and ko rules are added in Step 4-5.
     // Returns true on success.
-    public bool place_stone(i32 x, i32 y, i32 color) {
+    public bool place_raw(i32 x, i32 y, i32 color) {
         if (!self.is_valid(x, y)) {
             return false;
         }
@@ -93,6 +93,127 @@ public class Board {
         self.grid[x][y] = color;
         self.move_count = self.move_count + 1;
         return true;
+    }
+
+    // Count liberties of the connected group at (x, y) via BFS flood fill.
+    // A liberty is an empty point adjacent to the group (counted once).
+    // Returns 0 for empty points.
+    // Queue: dynamic array (Vec) - push grows, old memory auto-freed.
+    public i32 count_liberties(i32 x, i32 y) {
+        i32 color = self.get(x, y);
+        if (color <= 0) {
+            return 0;
+        }
+        i32[13][13] seen_stone = {0};
+        i32[13][13] seen_lib = {0};
+        i32[] qx;
+        i32[] qy;
+        qx.push(x);
+        qy.push(y);
+        seen_stone[x][y] = 1;
+        i32 head = 0;
+        i32 libs = 0;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        while (qx.len() > (usize)head) {
+            i32 cx = qx[head];
+            i32 cy = qy[head];
+            head = head + 1;
+            for (i32 d = 0; d < 4; d++) {
+                i32 nx = cx + dxs[d];
+                i32 ny = cy + dys[d];
+                // NOTE: never use `continue` inside Hust for-loops!
+                // for -> while translation puts the counter update at the
+                // loop tail, so `continue` skips it and hangs forever.
+                if (self.is_valid(nx, ny)) {
+                    if (self.grid[nx][ny] == 0) {
+                        if (seen_lib[nx][ny] == 0) {
+                            seen_lib[nx][ny] = 1;
+                            libs = libs + 1;
+                        }
+                    } else if (self.grid[nx][ny] == color) {
+                        if (seen_stone[nx][ny] == 0) {
+                            seen_stone[nx][ny] = 1;
+                            qx.push(nx);
+                            qy.push(ny);
+                        }
+                    }
+                }
+            }
+        }
+        return libs;
+    }
+
+    // Remove the whole connected group at (x, y); returns stones removed.
+    // Caller must verify the group has no liberties (capture) first.
+    // Queue: dynamic array (Vec).
+    public i32 remove_group(i32 x, i32 y) {
+        i32 color = self.grid[x][y];
+        if (color == 0) {
+            return 0;
+        }
+        i32[] qx;
+        i32[] qy;
+        self.grid[x][y] = 0;
+        qx.push(x);
+        qy.push(y);
+        i32 head = 0;
+        i32 count = 1;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        while (qx.len() > (usize)head) {
+            i32 cx = qx[head];
+            i32 cy = qy[head];
+            head = head + 1;
+            for (i32 d = 0; d < 4; d++) {
+                i32 nx = cx + dxs[d];
+                i32 ny = cy + dys[d];
+                if (self.is_valid(nx, ny) && self.grid[nx][ny] == color) {
+                    self.grid[nx][ny] = 0;
+                    qx.push(nx);
+                    qy.push(ny);
+                    count = count + 1;
+                }
+            }
+        }
+        return count;
+    }
+
+    // Place a stone and remove opponent groups left without liberties.
+    // Returns number of stones captured this move, or -1 if illegal
+    // (out of range / occupied).
+    // NOTE: suicide and ko checks are added in Step 5.
+    public i32 place_stone(i32 x, i32 y, i32 color) {
+        if (!self.is_valid(x, y)) {
+            return -1;
+        }
+        if (!self.is_empty(x, y)) {
+            return -1;
+        }
+        self.grid[x][y] = color;
+        i32 captured = 0;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        i32 opp = self.opponent(color);
+        for (i32 d = 0; d < 4; d++) {
+            i32 nx = x + dxs[d];
+            i32 ny = y + dys[d];
+            // No `continue` here - see count_liberties note (hang bug).
+            if (self.is_valid(nx, ny)) {
+                if (self.grid[nx][ny] == opp) {
+                    if (self.count_liberties(nx, ny) == 0) {
+                        captured = captured + self.remove_group(nx, ny);
+                    }
+                }
+            }
+        }
+        if (color == 1) {
+            self.black_captures = self.black_captures + captured;
+        } else {
+            self.white_captures = self.white_captures + captured;
+        }
+        self.move_count = self.move_count + 1;
+        return captured;
     }
 
     // Captured-stone count for a side (1 = black, 2 = white)

@@ -21,11 +21,55 @@ void main() {
     println!("  G7={} G8={} H7={} H8={} OK: {} (expect 1 2 2 1 true)",
         g7, g8, h7, h8, stones_ok);
 
-    bool p1 = b.place_stone(3, 3, 1);
-    bool p2 = b.place_stone(3, 3, 2);
-    bool p3 = b.place_stone(13, 0, 1);
-    println!("  place D4={} dup={} oob={} (expect true false false)", p1, p2, p3);
+    bool p1 = b.place_raw(3, 3, 1);
+    bool p2 = b.place_raw(3, 3, 2);
+    bool p3 = b.place_raw(13, 0, 1);
+    println!("  place D4 -> {} , dup -> {} , oob -> {} (expect true false false)", p1, p2, p3);
     println!("");
+
+    // ============ Step 4 verification: liberties & captures ============
+    println!("Step 4: liberties and captures");
+
+    // Scenario A: corner single stone capture
+    b.clear();
+    i32 a1 = b.place_stone(0, 0, 2);
+    i32 a2 = b.place_stone(0, 1, 1);
+    i32 a3 = b.place_stone(1, 0, 1);
+    bool a4 = b.is_empty(0, 0);
+    println!("  corner: white at A1 -> {} , black at A2 -> {} , black at B1 -> {} (expect 0 0 1)", a1, a2, a3);
+    println!("  after: A1 empty -> {} , black_captures -> {} (expect true 1)", a4, b.black_captures);
+
+    // Scenario B: liberties of twist-cross stones
+    b.clear();
+    i32 lib_g7 = b.count_liberties(6, 6);
+    i32 lib_h8 = b.count_liberties(7, 7);
+    println!("  libs of G7 black -> {} (expect 2: F7 G6 open, H7 G8 white)", lib_g7);
+    println!("  libs of H8 black -> {} (expect 2: J8 H9 open, H7 G8 white)", lib_h8);
+
+    // Scenario C: two-stone group captured
+    b.clear();
+    i32 w1 = b.place_stone(0, 0, 2);
+    i32 w2 = b.place_stone(0, 1, 2);
+    i32 lib3 = b.count_liberties(0, 0);
+    i32 k1 = b.place_stone(1, 0, 1);
+    i32 k2 = b.place_stone(1, 1, 1);
+    i32 lib1 = b.count_liberties(0, 0);
+    i32 k3 = b.place_stone(0, 2, 1);
+    println!("  group: white at A1 -> {} , at A2 -> {} , group libs -> {} (expect 0 0 3)", w1, w2, lib3);
+    println!("  after B1 B2 -> libs {} (expect 1) , black at A3 captures -> {} (expect 2)", lib1, k3);
+    println!("  after: black_captures -> {} , A1 -> {} , A2 -> {} (expect 2 0 0)",
+        b.black_captures, b.get(0, 0), b.get(0, 1));
+
+    // Scenario D: both sides capture independently
+    b.clear();
+    i32 d1 = b.place_stone(0, 0, 2);
+    i32 d2 = b.place_stone(0, 1, 1);
+    i32 d3 = b.place_stone(1, 0, 1);
+    i32 d4 = b.place_stone(12, 12, 1);
+    i32 d5 = b.place_stone(11, 12, 2);
+    i32 d6 = b.place_stone(12, 11, 2);
+    println!("  both sides: black -> {} , white -> {} (expect 1 1: black took A1, white took M13)",
+        b.black_captures, b.white_captures);
 
     // ============ Step 3 verification: coordinates ============
     println!("Step 3: coordinate conversion");

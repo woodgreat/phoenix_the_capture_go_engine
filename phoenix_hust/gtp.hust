@@ -13,7 +13,7 @@
 // (i32 -> u8 -> char) instead.
 
 // Column letter to internal x. A..M -> 0..12, otherwise -1.
-pub i32 gtp_col_to_x(char c) {
+public i32 gtp_col_to_x(char c) {
     if (c >= 'A' && c <= 'M') {
         return (i32)c - (i32)'A';
     }
@@ -22,7 +22,7 @@ pub i32 gtp_col_to_x(char c) {
 
 // Internal x to column letter. 0..12 -> A..M.
 // Invalid x returns '?'.
-pub char x_to_gtp_col(i32 x) {
+public char x_to_gtp_col(i32 x) {
     if (x < 0 || x > 12) {
         return '?';
     }
@@ -33,7 +33,7 @@ pub char x_to_gtp_col(i32 x) {
 
 // Parse the column letter of a GTP coordinate string ("D4" -> 3).
 // Returns -1 if the string is empty or the first char is not a column.
-pub i32 gtp_coord_to_x(String coord) {
+public i32 gtp_coord_to_x(String coord) {
     if (coord.len() == 0) {
         return -1;
     }
@@ -44,7 +44,7 @@ pub i32 gtp_coord_to_x(String coord) {
 // Parse the row number of a GTP coordinate string ("D4" -> 3).
 // Scans all digits in the string ("A13" -> 12). Returns -1 for
 // missing/out-of-range row numbers (covers "pass" and "resign").
-pub i32 gtp_coord_to_y(String coord) {
+public i32 gtp_coord_to_y(String coord) {
     i32 num = 0;
     bool has_digit = false;
     for (i32 i = 0; i < coord.len(); i++) {
@@ -62,7 +62,7 @@ pub i32 gtp_coord_to_y(String coord) {
 }
 
 // Internal coords to GTP coordinate string: (6,6) -> "G7".
-pub String xy_to_gtp(i32 x, i32 y) {
+public String xy_to_gtp(i32 x, i32 y) {
     char col = x_to_gtp_col(x);
     i32 row = y + 1;
     return format!("{}{}", col, row);
