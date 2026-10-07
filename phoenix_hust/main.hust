@@ -1,272 +1,138 @@
 // Phoenix - Wood Capture Go Engine
-// Entry point (Step 3: + coordinate conversion verification)
+// Step 7: GTP main loop
+//
+// GTP v2 protocol over stdin/stdout:
+//   request : [id] command args...
+//   response: = result\n\n  (success)  |  ? error\n\n  (failure)
+//
+// IO (verified in io_probe experiment, Hust 0.1.35):
+//   - read line (EOF-safe): std::io::stdin().lines().next()
+//       .unwrap_or(Ok(String::new())).unwrap()
+//     newline is stripped by lines(); EOF yields an empty string
+//   - flush (MANDATORY after every response, stdout is block-buffered
+//     on pipes): std::io::Write::flush(&mut std::io::stdout())
+//
+// Command dispatch is INLINED in the main loop: the transpiler does
+// not accept class-typed function definitions/returns (Board in/out
+// would be silently passed through), so handle_command() as a free
+// function is not possible. Ownership stays with main's `b`.
 
 use board;
 use gtp;
-use rules;
 
 void main() {
     Board b = new Board();
     b.setup_twist_cross();
 
-    println!("Phoenix Wood Capture Go Engine v0.1.0");
-    println!("");
+    i32 empty_streak = 0;
+    while (true) {
+        String line = std::io::stdin().lines().next().unwrap_or(Ok(String::new())).unwrap();
 
-    // ============ Step 2 verification: twist-cross ============
-    println!("Step 2: twist-cross stone check");
-    i32 g7 = b.get(6, 6);
-    i32 g8 = b.get(6, 7);
-    i32 h7 = b.get(7, 6);
-    i32 h8 = b.get(7, 7);
-    bool stones_ok = g7 == 1 && g8 == 2 && h7 == 2 && h8 == 1;
-    println!("  G7={} G8={} H7={} H8={} OK: {} (expect 1 2 2 1 true)",
-        g7, g8, h7, h8, stones_ok);
+        // Blank lines are ignored per GTP, but EOF also yields empty
+        // strings forever: 3 blanks in a row -> input closed -> quit
+        if (line.len() == 0) {
+            empty_streak = empty_streak + 1;
+            if (empty_streak >= 3) {
+                break;
+            }
+            continue;
+        }
+        empty_streak = 0;
 
-    bool p1 = b.place_raw(3, 3, 1);
-    bool p2 = b.place_raw(3, 3, 2);
-    bool p3 = b.place_raw(13, 0, 1);
-    println!("  place D4 -> {} , dup -> {} , oob -> {} (expect true false false)", p1, p2, p3);
-    println!("");
-
-    // ============ Step 4 verification: liberties & captures ============
-    println!("Step 4: liberties and captures");
-
-    // Scenario A: corner single stone capture
-    b.clear();
-    i32 a1 = b.place_stone(0, 0, 2);
-    i32 a2 = b.place_stone(0, 1, 1);
-    i32 a3 = b.place_stone(1, 0, 1);
-    bool a4 = b.is_empty(0, 0);
-    println!("  corner: white at A1 -> {} , black at A2 -> {} , black at B1 -> {} (expect 0 0 1)", a1, a2, a3);
-    println!("  after: A1 empty -> {} , black_captures -> {} (expect true 1)", a4, b.black_captures);
-
-    // Scenario B: liberties of twist-cross stones
-    b.clear();
-    i32 lib_g7 = b.count_liberties(6, 6);
-    i32 lib_h8 = b.count_liberties(7, 7);
-    println!("  libs of G7 black -> {} (expect 2: F7 G6 open, H7 G8 white)", lib_g7);
-    println!("  libs of H8 black -> {} (expect 2: J8 H9 open, H7 G8 white)", lib_h8);
-
-    // Scenario C: two-stone group captured
-    b.clear();
-    i32 w1 = b.place_stone(0, 0, 2);
-    i32 w2 = b.place_stone(0, 1, 2);
-    i32 lib3 = b.count_liberties(0, 0);
-    i32 k1 = b.place_stone(1, 0, 1);
-    i32 k2 = b.place_stone(1, 1, 1);
-    i32 lib1 = b.count_liberties(0, 0);
-    i32 k3 = b.place_stone(0, 2, 1);
-    println!("  group: white at A1 -> {} , at A2 -> {} , group libs -> {} (expect 0 0 3)", w1, w2, lib3);
-    println!("  after B1 B2 -> libs {} (expect 1) , black at A3 captures -> {} (expect 2)", lib1, k3);
-    println!("  after: black_captures -> {} , A1 -> {} , A2 -> {} (expect 2 0 0)",
-        b.black_captures, b.get(0, 0), b.get(0, 1));
-
-    // Scenario D: both sides capture independently
-    b.clear();
-    i32 d1 = b.place_stone(0, 0, 2);
-    i32 d2 = b.place_stone(0, 1, 1);
-    i32 d3 = b.place_stone(1, 0, 1);
-    i32 d4 = b.place_stone(12, 12, 1);
-    i32 d5 = b.place_stone(11, 12, 2);
-    i32 d6 = b.place_stone(12, 11, 2);
-    println!("  both sides: black -> {} , white -> {} (expect 1 1: black took A1, white took M13)",
-        b.black_captures, b.white_captures);
-    println!("");
-
-    // ============ Step 5 verification: suicide & ko ============
-    println!("Step 5: suicide and ko rule");
-
-    // Scenario E: suicide (no liberties, no capture) -> reject -2
-    b.clear();
-    i32 e1 = b.place_stone(0, 1, 2);
-    i32 e2 = b.place_stone(1, 0, 2);
-    i32 e3 = b.place_stone(0, 0, 1);
-    bool e4 = b.is_empty(0, 0);
-    println!("  suicide: W(0,1) -> {} , W(1,0) -> {} , B(0,0) -> {} (expect 0 0 -2)",
-        e1, e2, e3);
-    println!("  after reject: A1 empty -> {} (expect true, board untouched)", e4);
-
-    // Scenario F: snapback-like pounce (self group has 0 liberties
-    // BUT captures 2 -> legal)
-    b.clear();
-    i32 f1 = b.place_stone(0, 1, 2);
-    i32 f2 = b.place_stone(1, 0, 2);
-    i32 f3 = b.place_stone(0, 2, 1);
-    i32 f4 = b.place_stone(1, 1, 1);
-    i32 f5 = b.place_stone(2, 0, 1);
-    i32 f6 = b.place_stone(0, 0, 1);
-    println!("  pounce: setup -> {} {} {} {} {} , B(0,0) -> {} (expect 0 0 0 0 0 2)",
-        f1, f2, f3, f4, f5, f6);
-    println!("  after: A1 black -> {} , A2 empty -> {} , B1 empty -> {} (expect 1 true true)",
-        b.get(0, 0), b.is_empty(0, 1), b.is_empty(1, 0));
-
-    // Scenario G: ko lifecycle (corner ko - the only shape where the
-    // capturing stone can be a lone stone with the ko point as its
-    // last liberty)
-    b.clear();
-    i32 g0 = b.place_stone(0, 0, 2);
-    i32 g1 = b.place_stone(1, 0, 1);
-    i32 g2 = b.place_stone(1, 1, 2);
-    i32 g3 = b.place_stone(0, 2, 2);
-    i32 g4 = b.place_stone(0, 1, 1);
-    println!("  ko: W(0,0) -> {} , B(1,0) -> {} , W(1,1) W(0,2) -> {} {} , B(0,1) captures -> {} (expect 0 0 0 0 1)",
-        g0, g1, g2, g3, g4);
-    println!("  ko point -> ({},{}) (expect 0 0)", b.ko_x, b.ko_y);
-
-    // Immediate recapture at the ko point: forbidden
-    i32 g6 = b.place_stone(0, 0, 2);
-    bool g7 = b.is_empty(0, 0);
-    bool g8 = b.get(0, 1) == 1;
-    println!("  W(0,0) immediate recapture -> {} (expect -3)", g6);
-    println!("  after reject: (0,0) empty -> {} , (0,1) black stays -> {} (expect true true)",
-        g7, g8);
-
-    // Ko dissolves after any other move
-    i32 g9 = b.place_stone(0, 12, 2);
-    i32 g10 = b.place_stone(0, 0, 2);
-    println!("  W(0,12) clears ko -> {} (expect 0) , W(0,0) now captures -> {} (expect 1)",
-        g9, g10);
-    println!("  captures: black -> {} , white -> {} (expect 1 1)",
-        b.black_captures, b.white_captures);
-    println!("");
-
-    // ============ Step 6 verification: victory conditions ============
-    println!("Step 6: victory conditions");
-
-    // I: ongoing game
-    b.clear();
-    i32 empty_now = 0;
-    for (i32 x = 0; x < 13; x++) {
-        for (i32 y = 0; y < 13; y++) {
-            if (b.get(x, y) == 0) {
-                empty_now = empty_now + 1;
+        // Tokenize: cmd a1 a2 (extra whitespace tolerated; GTP command
+        // IDs are parsed in Step 8)
+        String cmd = "";
+        String a1 = "";
+        String a2 = "";
+        i32 stage = 0;
+        for (i32 i = 0; i < line.len(); i++) {
+            char ch = line.chars().nth((usize)i).unwrap();
+            if (ch == ' ' || ch == '\t') {
+                if (stage == 0 && cmd.len() > 0) {
+                    stage = 1;
+                } else if (stage == 1 && a1.len() > 0) {
+                    stage = 2;
+                }
+            } else {
+                if (stage == 0) {
+                    cmd.push(ch);
+                } else if (stage == 1) {
+                    a1.push(ch);
+                } else {
+                    a2.push(ch);
+                }
             }
         }
-    }
-    i32 st_ongoing = check_game_over(b.black_captures, b.white_captures, empty_now);
-    println!("  fresh board ({} empty) -> {} (expect 165 empty, 0 = ongoing)",
-        empty_now, st_ongoing);
 
-    // J: white captures 5 -> white wins
-    b.clear();
-    for (i32 x = 2; x < 7; x++) {
-        b.set(x, 2, 1);
-    }
-    for (i32 x = 2; x < 7; x++) {
-        b.set(x, 1, 2);
-    }
-    b.set(1, 2, 2);
-    b.set(7, 2, 2);
-    for (i32 x = 2; x < 6; x++) {
-        b.set(x, 3, 2);
-    }
-    i32 j1 = b.place_stone(6, 3, 2);
-    i32 empty_j = 0;
-    for (i32 x = 0; x < 13; x++) {
-        for (i32 y = 0; y < 13; y++) {
-            if (b.get(x, y) == 0) {
-                empty_j = empty_j + 1;
+        if (cmd == "quit") {
+            println!("=");
+            println!("");
+            std::io::Write::flush(&mut std::io::stdout());
+            break;
+        } else if (cmd == "protocol_version") {
+            println!("= 2");
+        } else if (cmd == "name") {
+            println!("= Wood Capture Go");
+        } else if (cmd == "version") {
+            println!("= 0.1.0.20261007170717");
+        } else if (cmd == "boardsize") {
+            i32 n = str_to_i32(a1.clone());
+            if (n == 13) {
+                println!("=");
+            } else {
+                println!("? unacceptable size");
             }
-        }
-    }
-    i32 st_white = check_game_over(b.black_captures, b.white_captures, empty_j);
-    String sc_white = format_final_score(b.black_captures, b.white_captures);
-    println!("  white captures 5 in one stroke -> {} (expect 5), status -> {} (expect 2)",
-        j1, st_white);
-    println!("  final -> {} (expect W+5)", sc_white.clone());
-
-    // K: black captures 6 -> black wins
-    b.clear();
-    for (i32 x = 2; x < 8; x++) {
-        b.set(x, 2, 2);
-    }
-    for (i32 x = 2; x < 8; x++) {
-        b.set(x, 1, 1);
-    }
-    b.set(1, 2, 1);
-    b.set(8, 2, 1);
-    for (i32 x = 2; x < 7; x++) {
-        b.set(x, 3, 1);
-    }
-    i32 k1 = b.place_stone(7, 3, 1);
-    i32 empty_k = 0;
-    for (i32 x = 0; x < 13; x++) {
-        for (i32 y = 0; y < 13; y++) {
-            if (b.get(x, y) == 0) {
-                empty_k = empty_k + 1;
+        } else if (cmd == "clear_board") {
+            b.clear();
+            println!("=");
+        } else if (cmd == "komi") {
+            // Wood Capture Go has no komi; only 0 is acceptable
+            if (a1 == "0" || a1 == "0.0" || a1 == "0.00" || a1 == "0.000") {
+                println!("=");
+            } else {
+                println!("? unacceptable komi");
             }
-        }
-    }
-    i32 st_black = check_game_over(b.black_captures, b.white_captures, empty_k);
-    String sc_black = format_final_score(b.black_captures, b.white_captures);
-    println!("  black captures 6 in one stroke -> {} (expect 6), status -> {} (expect 1)",
-        k1, st_black);
-    println!("  final -> {} (expect B+6)", sc_black.clone());
-
-    // L: full board, equal captures -> white wins by rule
-    b.clear();
-    for (i32 x = 0; x < 13; x++) {
-        for (i32 y = 0; y < 13; y++) {
-            b.set(x, y, 1);
-        }
-    }
-    i32 st_full = check_game_over(b.black_captures, b.white_captures, 0);
-    String sc_full = format_final_score(b.black_captures, b.white_captures);
-    println!("  full board 0:0 -> status {} (expect 2, tie goes to white), final -> {} (expect 0)",
-        st_full, sc_full.clone());
-
-    // ============ Step 3 verification: coordinates ============
-    println!("Step 3: coordinate conversion");
-
-    // Specific points
-    String s_d4 = xy_to_gtp(3, 3);
-    String s_g7 = xy_to_gtp(6, 6);
-    String s_i10 = xy_to_gtp(8, 9);
-    String s_corner = xy_to_gtp(12, 12);
-    println!("  (3,3)->{} (expect D4)", s_d4);
-    println!("  (6,6)->{} (expect G7)", s_g7);
-    println!("  (8,9)->{} (expect I10, letters A-M continuous)", s_i10);
-    println!("  (12,12)->{} (expect M13)", s_corner);
-
-    i32 dx = gtp_coord_to_x("D4".to_string());
-    i32 dy = gtp_coord_to_y("D4".to_string());
-    i32 gx = gtp_coord_to_x("G7".to_string());
-    i32 gy = gtp_coord_to_y("G7".to_string());
-    i32 ix = gtp_coord_to_x("I10".to_string());
-    i32 iy = gtp_coord_to_y("I10".to_string());
-    i32 ax = gtp_coord_to_x("A1".to_string());
-    i32 ay = gtp_coord_to_y("A1".to_string());
-    i32 mx = gtp_coord_to_x("M13".to_string());
-    i32 my = gtp_coord_to_y("M13".to_string());
-    println!("  D4->({},{}) (expect 3 3)", dx, dy);
-    println!("  G7->({},{}) (expect 6 6)", gx, gy);
-    println!("  I10->({},{}) (expect 8 9)", ix, iy);
-    println!("  A1->({},{}) (expect 0 0)", ax, ay);
-    println!("  M13->({},{}) (expect 12 12)", mx, my);
-
-    // Round trip over all 169 points
-    bool all_ok = true;
-    for (i32 x = 0; x < 13; x++) {
-        for (i32 y = 0; y < 13; y++) {
-            String s = xy_to_gtp(x, y);
-            i32 rx = gtp_coord_to_x(s.clone());
-            i32 ry = gtp_coord_to_y(s.clone());
-            if (rx != x || ry != y) {
-                all_ok = false;
-                println!("  MISMATCH: ({},{}) -> {} -> ({},{})", x, y, s.clone(), rx, ry);
+        } else if (cmd == "showboard") {
+            println!("=");
+            b.print_board();
+        } else if (cmd == "play") {
+            // play <color> <coord|pass|resign>
+            i32 color = 0;
+            if (a1 == "black" || a1 == "b") {
+                color = 1;
+            } else if (a1 == "white" || a1 == "w") {
+                color = 2;
             }
+            if (color == 0) {
+                println!("? invalid color");
+            } else if (a2 == "pass" || a2 == "resign") {
+                println!("=");
+            } else {
+                i32 x = gtp_coord_to_x(a2.clone());
+                i32 y = gtp_coord_to_y(a2.clone());
+                if (x < 0 || y < 0) {
+                    println!("? invalid coordinate");
+                } else {
+                    i32 r = b.place_stone(x, y, color);
+                    if (r >= 0) {
+                        println!("=");
+                    } else if (r == -2) {
+                        println!("? illegal move (suicide)");
+                    } else if (r == -3) {
+                        println!("? illegal move (ko)");
+                    } else {
+                        println!("? illegal move");
+                    }
+                }
+            }
+        } else if (cmd == "genmove") {
+            // Placeholder until the Step 9 AI lands: always pass
+            println!("= pass");
+        } else {
+            println!("? unknown command");
         }
-    }
-    println!("  round trip 169 points OK: {}", all_ok);
 
-    // Invalid inputs
-    i32 px = gtp_coord_to_x("pass".to_string());
-    i32 py = gtp_coord_to_y("pass".to_string());
-    i32 ex = gtp_coord_to_x("".to_string());
-    i32 zx = gtp_coord_to_x("Z9".to_string());
-    i32 nx2 = gtp_coord_to_x("N9".to_string());
-    println!("  pass->({},{}) (expect -1 -1)", px, py);
-    println!("  empty string -> x = {} (expect -1)", ex);
-    println!("  bad column Z9 -> x = {} (expect -1)", zx);
-    println!("  bad column N9 -> x = {} (expect -1, max column is M)", nx2);
+        println!("");
+        std::io::Write::flush(&mut std::io::stdout());
+    }
 }

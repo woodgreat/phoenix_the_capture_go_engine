@@ -1,6 +1,7 @@
 // gtp.hust - GTP protocol helpers
 // Step 3: coordinate conversion (GTP <-> internal board coords)
 // Step 6: final score formatting
+// Step 7: string utilities for command parsing
 //
 // Coordinate system (Wood Capture Go: NO letter skipping):
 //   Columns A..M continuous (13 letters, I and O are NOT skipped),
@@ -67,6 +68,27 @@ public String xy_to_gtp(i32 x, i32 y) {
     char col = x_to_gtp_col(x);
     i32 row = y + 1;
     return format!("{}{}", col, row);
+}
+
+// Parse a non-negative decimal integer; -1 on empty string or any
+// non-digit character (GTP command arguments like boardsize 13).
+public i32 str_to_i32(String s) {
+    i32 num = 0;
+    bool has_digit = false;
+    for (i32 i = 0; i < s.len(); i++) {
+        char c = s.chars().nth((usize)i).unwrap();
+        if (c >= '0' && c <= '9') {
+            has_digit = true;
+            i32 d = (i32)c - (i32)'0';
+            num = num * 10 + d;
+        } else {
+            return -1;
+        }
+    }
+    if (!has_digit) {
+        return -1;
+    }
+    return num;
 }
 
 // Format the capture difference as a GTP final_score result.
