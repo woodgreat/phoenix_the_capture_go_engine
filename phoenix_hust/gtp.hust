@@ -1,5 +1,6 @@
 // gtp.hust - GTP protocol helpers
 // Step 3: coordinate conversion (GTP <-> internal board coords)
+// Step 6: final score formatting
 //
 // Coordinate system (Wood Capture Go: NO letter skipping):
 //   Columns A..M continuous (13 letters, I and O are NOT skipped),
@@ -66,4 +67,18 @@ public String xy_to_gtp(i32 x, i32 y) {
     char col = x_to_gtp_col(x);
     i32 row = y + 1;
     return format!("{}{}", col, row);
+}
+
+// Format the capture difference as a GTP final_score result.
+// B+N when black is ahead, W+N when white is ahead, "0" on a tie.
+// (Wood Capture Go has no territory score; the difference is captures.)
+public String format_final_score(i32 black_cap, i32 white_cap) {
+    i32 diff = black_cap - white_cap;
+    if (diff > 0) {
+        return format!("B+{}", diff);
+    }
+    if (diff < 0) {
+        return format!("W+{}", -diff);
+    }
+    return "0".to_string();
 }

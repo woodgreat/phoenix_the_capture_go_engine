@@ -3,6 +3,7 @@
 
 use board;
 use gtp;
+use rules;
 
 void main() {
     Board b = new Board();
@@ -127,6 +128,92 @@ void main() {
         g9, g10);
     println!("  captures: black -> {} , white -> {} (expect 1 1)",
         b.black_captures, b.white_captures);
+    println!("");
+
+    // ============ Step 6 verification: victory conditions ============
+    println!("Step 6: victory conditions");
+
+    // I: ongoing game
+    b.clear();
+    i32 empty_now = 0;
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            if (b.get(x, y) == 0) {
+                empty_now = empty_now + 1;
+            }
+        }
+    }
+    i32 st_ongoing = check_game_over(b.black_captures, b.white_captures, empty_now);
+    println!("  fresh board ({} empty) -> {} (expect 165 empty, 0 = ongoing)",
+        empty_now, st_ongoing);
+
+    // J: white captures 5 -> white wins
+    b.clear();
+    for (i32 x = 2; x < 7; x++) {
+        b.set(x, 2, 1);
+    }
+    for (i32 x = 2; x < 7; x++) {
+        b.set(x, 1, 2);
+    }
+    b.set(1, 2, 2);
+    b.set(7, 2, 2);
+    for (i32 x = 2; x < 6; x++) {
+        b.set(x, 3, 2);
+    }
+    i32 j1 = b.place_stone(6, 3, 2);
+    i32 empty_j = 0;
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            if (b.get(x, y) == 0) {
+                empty_j = empty_j + 1;
+            }
+        }
+    }
+    i32 st_white = check_game_over(b.black_captures, b.white_captures, empty_j);
+    String sc_white = format_final_score(b.black_captures, b.white_captures);
+    println!("  white captures 5 in one stroke -> {} (expect 5), status -> {} (expect 2)",
+        j1, st_white);
+    println!("  final -> {} (expect W+5)", sc_white.clone());
+
+    // K: black captures 6 -> black wins
+    b.clear();
+    for (i32 x = 2; x < 8; x++) {
+        b.set(x, 2, 2);
+    }
+    for (i32 x = 2; x < 8; x++) {
+        b.set(x, 1, 1);
+    }
+    b.set(1, 2, 1);
+    b.set(8, 2, 1);
+    for (i32 x = 2; x < 7; x++) {
+        b.set(x, 3, 1);
+    }
+    i32 k1 = b.place_stone(7, 3, 1);
+    i32 empty_k = 0;
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            if (b.get(x, y) == 0) {
+                empty_k = empty_k + 1;
+            }
+        }
+    }
+    i32 st_black = check_game_over(b.black_captures, b.white_captures, empty_k);
+    String sc_black = format_final_score(b.black_captures, b.white_captures);
+    println!("  black captures 6 in one stroke -> {} (expect 6), status -> {} (expect 1)",
+        k1, st_black);
+    println!("  final -> {} (expect B+6)", sc_black.clone());
+
+    // L: full board, equal captures -> white wins by rule
+    b.clear();
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            b.set(x, y, 1);
+        }
+    }
+    i32 st_full = check_game_over(b.black_captures, b.white_captures, 0);
+    String sc_full = format_final_score(b.black_captures, b.white_captures);
+    println!("  full board 0:0 -> status {} (expect 2, tie goes to white), final -> {} (expect 0)",
+        st_full, sc_full.clone());
 
     // ============ Step 3 verification: coordinates ============
     println!("Step 3: coordinate conversion");

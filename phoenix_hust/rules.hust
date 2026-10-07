@@ -1,0 +1,35 @@
+// rules.hust - pure rule-checking functions
+// Step 6: victory conditions
+//
+// Pure scalar functions only: Hust classes are value types and Board
+// cannot be passed by reference, so rule checks take scalar inputs
+// (capture counts, empty-point count) instead of a Board.
+
+// Victory thresholds (Wood Capture Go): black captures 6, white 5.
+const i32 BLACK_TARGET = 6;
+const i32 WHITE_TARGET = 5;
+
+// Check whether the game is over.
+//   black_cap / white_cap: capture counters so far
+//   empty_count: number of empty points on the board
+// Returns:
+//   0 = ongoing
+//   1 = black wins (capture target reached, or board full with more
+//       black captures)
+//   2 = white wins (capture target reached, or board full; equal
+//       captures on a full board also go to white)
+public i32 check_game_over(i32 black_cap, i32 white_cap, i32 empty_count) {
+    if (black_cap >= BLACK_TARGET) {
+        return 1;
+    }
+    if (white_cap >= WHITE_TARGET) {
+        return 2;
+    }
+    if (empty_count == 0) {
+        if (black_cap > white_cap) {
+            return 1;
+        }
+        return 2;
+    }
+    return 0;
+}
