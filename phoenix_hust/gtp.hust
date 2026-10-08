@@ -14,10 +14,17 @@
 // buggy (stray parentheses in output); use step-by-step casts
 // (i32 -> u8 -> char) instead.
 
-// Column letter to internal x. A..M -> 0..12, otherwise -1.
+// Column letter to internal x. A..M -> 0..12 (case-insensitive:
+// a..m accepted), otherwise -1.
 public i32 gtp_col_to_x(char c) {
-    if (c >= 'A' && c <= 'M') {
-        return (i32)c - (i32)'A';
+    char cc = c;
+    if (cc >= 'a' && cc <= 'z') {
+        i32 code = (i32)cc - 32;
+        u8 u = (u8)code;
+        cc = (char)u;
+    }
+    if (cc >= 'A' && cc <= 'M') {
+        return (i32)cc - (i32)'A';
     }
     return -1;
 }

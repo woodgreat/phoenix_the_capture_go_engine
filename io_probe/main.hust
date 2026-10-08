@@ -1,0 +1,9 @@
+// probe v9 - std::env::args (full-path passthrough, like stdin)
+
+void main() {
+    String a1 = std::env::args().nth(1).unwrap_or(String::new());
+    String a2 = std::env::args().nth(2).unwrap_or(String::new());
+    println!("arg1=[{}]", a1.clone());
+    println!("arg2=[{}]", a2.clone());
+    println!("PROBE-END");
+}
