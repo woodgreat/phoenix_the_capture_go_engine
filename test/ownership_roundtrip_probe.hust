@@ -1,0 +1,37 @@
+// probe v7b - ownership round-trip with mutable rebind
+
+class Board {
+    i32[13][13] grid;
+
+    public i32 get(i32 x, i32 y) {
+        return self.grid[x][y];
+    }
+
+    public void set(i32 x, i32 y, i32 v) {
+        self.grid[x][y] = v;
+    }
+}
+
+interface MoveGenerator {
+    public genmove(board, color);
+}
+
+class Level1 implements MoveGenerator {
+    public Board genmove(Board board, i32 color) {
+        Board b2 = board;        // rebind: params are immutable, local vars are mut
+        b2.set(3, 3, color);     // AI decision: place a stone
+        return b2;               // hand the board back
+    }
+}
+
+void main() {
+    Board b = new Board();
+    Level1 l1 = new Level1();
+    b = l1.genmove(b, 1);
+    println!("after AI: (3,3) = {} (expect 1)", b.get(3, 3));
+    b = l1.genmove(b, 2);
+    println!("after AI: (3,3) = {} (expect 2)", b.get(3, 3));
+    b.set(0, 0, 9);
+    println!("main still owns b: (0,0) = {} (expect 9)", b.get(0, 0));
+    println!("PROBE-END");
+}
