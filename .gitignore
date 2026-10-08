@@ -5,3 +5,5 @@ phoenix_hust/phoenix
 # Rust build directories
 target/
 build/
+# Hust probe working dirs
+io_probe/
