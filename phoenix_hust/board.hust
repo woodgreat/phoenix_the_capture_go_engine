@@ -6,6 +6,12 @@
 //   y = row - 1 (0 = row 1, ..., 12 = row 13)
 //
 // Stone codes: 0 = empty, 1 = black, 2 = white
+//
+// NOTE (2026-10-09): transposition table implementation PAUSED - blocked
+// by Hust transpiler issues B6~B9 (see hust_issues_for_longerxia.md).
+// The TT probe/store code inside minimax is INERT: zobrist_hash() returns
+// a value but tt_hash[] etc. do not exist, so no TT path compiles in.
+// Resume when any of B6/B7/B8/B9 or out-params is fixed.
 
 public class Board {
     i32[13][13] grid;
@@ -119,7 +125,7 @@ public class Board {
     // Count liberties of the connected group at (x, y) via BFS flood fill.
     // A liberty is an empty point adjacent to the group (counted once).
     // Returns 0 for empty points.
-    // Queue: dynamic array (Vec) - push grows, old memory auto-freed.
+    // Uses static arrays only (&self, no Vec push/mut).
     public i32 count_liberties(i32 x, i32 y) {
         i32 color = self.get(x, y);
         if (color <= 0) {
@@ -127,19 +133,21 @@ public class Board {
         }
         i32[13][13] seen_stone = {0};
         i32[13][13] seen_lib = {0};
-        i32[] qx;
-        i32[] qy;
-        qx.push(x);
-        qy.push(y);
+        i32[169] stack = {0};
+        i32[169] liblist = {0};
+        i32 top = 0;
+        i32 ltop = 0;
+        stack[0] = x * 13 + y;
+        top = 1;
         seen_stone[x][y] = 1;
-        i32 head = 0;
         i32 libs = 0;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-        while (qx.len() > (usize)head) {
-            i32 cx = qx[head];
-            i32 cy = qy[head];
-            head = head + 1;
+        while (top > 0) {
+            top = top - 1;
+            i32 code = stack[top];
+            i32 cx = code / 13;
+            i32 cy = code - cx * 13;
             for (i32 d = 0; d < 4; d++) {
                 i32 nx = cx + dxs[d];
                 i32 ny = cy + dys[d];
@@ -150,19 +158,20 @@ public class Board {
                     if (self.grid[nx][ny] == 0) {
                         if (seen_lib[nx][ny] == 0) {
                             seen_lib[nx][ny] = 1;
-                            libs = libs + 1;
+                            liblist[ltop] = nx * 13 + ny;
+                            ltop = ltop + 1;
                         }
                     } else if (self.grid[nx][ny] == color) {
                         if (seen_stone[nx][ny] == 0) {
                             seen_stone[nx][ny] = 1;
-                            qx.push(nx);
-                            qy.push(ny);
+                            stack[top] = nx * 13 + ny;
+                            top = top + 1;
                         }
                     }
                 }
             }
         }
-        return libs;
+        return ltop;
     }
 
     // Remove the whole connected group at (x, y); returns stones removed.
@@ -395,6 +404,9 @@ public class Board {
 
     // === Search primitives for the alpha-beta AI (Step 11) ===
 
+    // Zobrist hash (TT support): PAUSED with the TT (Hust B6~B9).
+    // Full version archived in test/tt_minimax_reference.hust.
+
     // Static evaluation from ai_color's perspective:
     //   stone diff * 10 + liberty attribution diff * 4 + counter diff * 100
     // Stones removed during search are absent from the grid, so the
@@ -441,13 +453,68 @@ public class Board {
             cap_diff = self.white_captures - self.black_captures;
         }
         // capture is the victory currency: stone diff dominates
-        return (my_stones - opp_stones) * 100 + (my_libs - opp_libs) * 8 + cap_diff * 100;
+        i32 eye = self.count_eye_potential(ai_color) - self.count_eye_potential(opp);
+        i32 conn = self.count_connection_strength(ai_color) - self.count_connection_strength(opp);
+        return (my_stones - opp_stones) * 100 + (my_libs - opp_libs) * 8
+             + cap_diff * 100 + eye * 50 + conn * 30;
+    }
+
+    // Eye potential for color: count points that could become eyes.
+    // A potential eye is an empty point surrounded on 3+ sides by own stones.
+    // The larger the group, the harder to kill.
+    public i32 count_eye_potential(i32 color) {
+        i32 score = 0;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (self.grid[x][y] == 0) {
+                    i32 adj = 0;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = x + dxs[d];
+                        i32 ny = y + dys[d];
+                        if (self.is_valid(nx, ny) && self.grid[nx][ny] == color) {
+                            adj = adj + 1;
+                        }
+                    }
+                    if (adj >= 3) {
+                        score = score + adj;
+                    }
+                }
+            }
+        }
+        return score;
+    }
+
+    // Connection strength for color: sum of adjacency between own stones.
+    // Each own stone contributes the number of own neighbors it has.
+    // Denser connection = harder to isolate and capture.
+    public i32 count_connection_strength(i32 color) {
+        i32 score = 0;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (self.grid[x][y] == color) {
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = x + dxs[d];
+                        i32 ny = y + dys[d];
+                        if (self.is_valid(nx, ny) && self.grid[nx][ny] == color) {
+                            score = score + 1;
+                        }
+                    }
+                }
+            }
+        }
+        return score / 2;  // each edge counted twice (from both ends)
     }
 
     // Alpha-beta minimax over the current position. Depth 0 returns the
     // static evaluation. Captures inside the search REALLY remove stones
     // (via remove_group); each node restores the grid from a snapshot
     // taken at entry, so the caller sees an unchanged board.
+    // NOTE (2026-10-09): TT integration PAUSED (Hust B6~B9); the full
+    // TT-enabled version is archived in test/tt_minimax_reference.hust.
     // Params are immutable in Hust: alpha/beta are rebound to locals.
     public i32 minimax(i32 depth, i32 color_to_move, i32 ai_color, i32 alpha_in, i32 beta_in) {
         i32 alpha = alpha_in;
