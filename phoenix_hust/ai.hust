@@ -1,28 +1,45 @@
-// ai.hust - AI strategy layer (shape-interface pattern, r44)
+// ai.hust - Unified AI strategy layer (2026-10-10 revision)
 //
-// Declaration: no types (shape). Implementation: types filled in.
-// Ownership round-trip: the board moves INTO genmove, the AI places
-// its stone, and the board moves BACK to the caller
-// (`b = l1.genmove(b, color);` - verified in io_probe v7b).
-// Level1 records the move it made; the caller reads last_x/last_y
-// to build the GTP response.
+// Design: 1-10 levels = thinking depth levels
+//   Level 1: greedy + random (no search)
+//   Level 2-10: alpha-beta iterative deepening search
+//   Depth = level, budget increases with level
+//
+// This replaces the old Level1/3/5/7/10 classes with a single
+// parameterized Level class.
 
 use board;
 
 interface MoveGenerator {
-    public genmove(board, color);
+    genmove(board, color);
 }
 
-public class Level1 implements MoveGenerator {
+// Unified Level class
+public class Level implements MoveGenerator {
+    i32 level;      // 1-10
+    i32 depth;      // search depth = level
+    i32 budget;     // node budget from table
     i32 last_x;
     i32 last_y;
+    i32[10] budgets;  // budget table (instance field, avoids module-level let)
 
-    public Level1() {
+    public Level(i32 lv) {
+        self.level = lv;
+        self.depth = lv;
+        self.budgets = {1000, 5000, 10000, 30000, 60000,
+                        100000, 150000, 220000, 300000, 500000};
+        self.budget = self.budget_for_level(lv);
         self.last_x = -1;
         self.last_y = -1;
     }
 
-    // The move made by the last genmove call (-1 = pass / nothing)
+    // Get budget for a given level (1-10)
+    public i32 budget_for_level(i32 lv) {
+        if (lv < 1) { return 1000; }
+        if (lv > 10) { return 500000; }
+        return self.budgets[lv - 1];
+    }
+
     public i32 last_x() {
         return self.last_x;
     }
@@ -31,8 +48,34 @@ public class Level1 implements MoveGenerator {
         return self.last_y;
     }
 
+    // Main entry: dispatch by level
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;   // rebind: params immutable, locals are mut
+        Board b2 = board;
+        if (self.level == 1) {
+            return self.genmove_greedy(b2, color);
+        }
+        // Level 2-10: alpha-beta search
+        i32 best_enc = self.search_root(b2, color, self.depth, self.budget);
+        if (best_enc < 0) {
+            self.last_x = -1;
+            self.last_y = -1;
+            return b2;
+        }
+        i32 mx = best_enc / 13;
+        i32 my = best_enc - mx * 13;
+        i32 r = b2.place_stone(mx, my, color);
+        if (r >= 0) {
+            self.last_x = mx;
+            self.last_y = my;
+        } else {
+            self.last_x = -1;
+            self.last_y = -1;
+        }
+        return b2;
+    }
+
+    // Level 1: greedy capture + random fallback
+    public Board genmove_greedy(Board b2, i32 color) {
         i32 opp = b2.opponent(color);
         i32[169] capture_moves = {0};
         i32 n_cap = 0;
@@ -44,7 +87,6 @@ public class Level1 implements MoveGenerator {
             for (i32 y = 0; y < 13; y++) {
                 if (b2.get(x, y) == 0) {
                     bool is_ko = b2.is_ko_point(x, y);
-                    // try the placement virtually
                     b2.set(x, y, color);
                     bool captures = false;
                     for (i32 d = 0; d < 4; d++) {
@@ -81,7 +123,6 @@ public class Level1 implements MoveGenerator {
             mv = empty_moves[b2.rand_below(n_empty)];
         }
         if (mv < 0) {
-            // no legal point: pass
             self.last_x = -1;
             self.last_y = -1;
             return b2;
@@ -93,253 +134,29 @@ public class Level1 implements MoveGenerator {
             self.last_x = mx;
             self.last_y = my;
         } else {
-            // defensive: candidates are pre-checked, should not happen
             self.last_x = -1;
             self.last_y = -1;
         }
         return b2;
     }
-}
 
-// Clamp a requested AI level to what is implemented.
-// Currently only level 1 exists; higher levels land in Steps 11-12.
-// (Will return MoveGenerator instances once the transpiler supports
-// interface-typed returns / derive(Clone) - see issue report Q4.)
-public i32 create_ai(i32 requested_level) {
-    return 1;
-}
-
-// Level 3: heuristic greedy - capture bonus, atari pressure, liberties,
-// adjacency, center preference. Single ply, best score wins (ties: first).
-public class Level3 implements MoveGenerator {
-    i32 last_x;
-    i32 last_y;
-
-    public Level3() {
-        self.last_x = -1;
-        self.last_y = -1;
-    }
-
-    public i32 last_x() {
-        return self.last_x;
-    }
-
-    public i32 last_y() {
-        return self.last_y;
-    }
-
-    public Board genmove(Board board, i32 color) {
-        Board b2 = board;
-        i32 opp = b2.opponent(color);
-        i32 best_enc = -1;
-        i32 best_score = -1000000;
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
-                if (b2.get(x, y) == 0) {
-                    bool is_ko = b2.is_ko_point(x, y);
-                    // virtual placement
-                    b2.set(x, y, color);
-                    i32 cap = 0;
-                    i32 atari = 0;
-                    for (i32 d = 0; d < 4; d++) {
-                        i32 nx = x + dxs[d];
-                        i32 ny = y + dys[d];
-                        if (b2.is_valid(nx, ny)) {
-                            if (b2.get(nx, ny) == opp) {
-                                i32 l = b2.count_liberties(nx, ny);
-                                if (l == 0) {
-                                    cap = cap + 1;
-                                } else if (l == 1) {
-                                    atari = atari + 1;
-                                }
-                            }
-                        }
-                    }
-                    bool alive = b2.count_liberties(x, y) > 0;
-                    i32 self_libs = b2.count_liberties(x, y);
-                    b2.set(x, y, 0);
-                    // legality filter
-                    bool legal = true;
-                    if (!alive && cap == 0) {
-                        legal = false;
-                    }
-                    if (is_ko && cap == 1) {
-                        legal = false;
-                    }
-                    if (legal) {
-                        i32 score = cap * 1000 + atari * 60 + self_libs * 8;
-                        i32 neighbors = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) != 0) {
-                                    neighbors = neighbors + 1;
-                                }
-                            }
-                        }
-                        score = score + neighbors * 4;
-                        i32 dist = x - 6;
-                        if (dist < 0) {
-                            dist = -dist;
-                        }
-                        i32 dy2 = y - 6;
-                        if (dy2 < 0) {
-                            dy2 = -dy2;
-                        }
-                        score = score + (12 - dist - dy2) * 2;
-                        if (score > best_score) {
-                            best_score = score;
-                            best_enc = x * 13 + y;
-                        }
-                    }
-                }
-            }
-        }
-        if (best_enc < 0) {
-            self.last_x = -1;
-            self.last_y = -1;
-            return b2;
-        }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
-        i32 r = b2.place_stone(mx, my, color);
-        if (r >= 0) {
-            self.last_x = mx;
-            self.last_y = my;
-        } else {
-            self.last_x = -1;
-            self.last_y = -1;
-        }
-        return b2;
-    }
-}
-
-// Level 5: alpha-beta search (root + 2-ply minimax on the Board).
-// Root candidates: every legal empty point (virtual check, suicide and
-// ko excluded). For each, snapshot -> place + real removal of captured
-// groups -> minimax(depth 2) -> restore. Best value wins.
-public class Level5 implements MoveGenerator {
-    i32 last_x;
-    i32 last_y;
-
-    public Level5() {
-        self.last_x = -1;
-        self.last_y = -1;
-    }
-
-    public i32 last_x() {
-        return self.last_x;
-    }
-
-    public i32 last_y() {
-        return self.last_y;
-    }
-
-    public Board genmove(Board board, i32 color) {
-        Board b2 = board;
-        i32 opp = b2.opponent(color);
-        i32 best_enc = -1;
-        i32 best_val = -999999;
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
-                if (b2.get(x, y) == 0) {
-                    bool is_ko = b2.is_ko_point(x, y);
-                    // snapshot before this root candidate
-                    i32[13][13] snap = {0};
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
-                            snap[i][j] = b2.get(i, j);
-                        }
-                    }
-                    b2.set(x, y, color);
-                    i32 cap = 0;
-                    for (i32 d = 0; d < 4; d++) {
-                        i32 nx = x + dxs[d];
-                        i32 ny = y + dys[d];
-                        if (b2.is_valid(nx, ny)) {
-                            if (b2.get(nx, ny) == opp) {
-                                if (b2.count_liberties(nx, ny) == 0) {
-                                    cap = cap + b2.remove_group(nx, ny);
-                                }
-                            }
-                        }
-                    }
-                    bool alive = b2.count_liberties(x, y) > 0;
-                    i32 val = -999999;
-                    if (alive && !(is_ko && cap == 1)) {
-                        val = b2.minimax(2, opp, color, -999999, 999999);
-                    }
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
-                            b2.set(i, j, snap[i][j]);
-                        }
-                    }
-                    if (val > best_val) {
-                        best_val = val;
-                        best_enc = x * 13 + y;
-                    }
-                }
-            }
-        }
-        if (best_enc < 0) {
-            self.last_x = -1;
-            self.last_y = -1;
-            return b2;
-        }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
-        i32 r = b2.place_stone(mx, my, color);
-        if (r >= 0) {
-            self.last_x = mx;
-            self.last_y = my;
-        } else {
-            self.last_x = -1;
-            self.last_y = -1;
-        }
-        return b2;
-    }
-}
-
-// Level 7: iterative deepening (depth 2..5) + node budget + endgame
-// pass policy (few empty points and no capture candidate -> pass, so
-// games can reach a decision within ~200 moves).
-public class Level7 implements MoveGenerator {
-    i32 last_x;
-    i32 last_y;
-
-    public Level7() {
-        self.last_x = -1;
-        self.last_y = -1;
-    }
-
-    public i32 last_x() {
-        return self.last_x;
-    }
-
-    public i32 last_y() {
-        return self.last_y;
-    }
-
-    public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+    // Root search: iterative deepening alpha-beta
+    // Returns best move encoding (x*13+y), or -1 for pass
+    public i32 search_root(Board b2, i32 color, i32 max_depth, i32 budget) {
         i32 opp = b2.opponent(color);
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-        // iterative deepening: 2..5 ply
         i32 best_enc = -1;
-        for (i32 dd = 2; dd <= 5; dd++) {
+        // Iterative deepening: 1..max_depth
+        for (i32 dd = 1; dd <= max_depth; dd++) {
             best_enc = -1;
             i32 best_val = -999999;
-            b2.start_search(300000);
+            b2.start_search(budget);
             for (i32 x = 0; x < 13; x++) {
                 for (i32 y = 0; y < 13; y++) {
                     if (b2.get(x, y) == 0) {
                         bool is_ko = b2.is_ko_point(x, y);
+                        // Snapshot before this candidate
                         i32[13][13] snap = {0};
                         for (i32 i = 0; i < 13; i++) {
                             for (i32 j = 0; j < 13; j++) {
@@ -364,6 +181,7 @@ public class Level7 implements MoveGenerator {
                         if (alive && !(is_ko && cap == 1)) {
                             val = b2.minimax(dd - 1, opp, color, -999999, 999999);
                         }
+                        // Restore snapshot
                         for (i32 i = 0; i < 13; i++) {
                             for (i32 j = 0; j < 13; j++) {
                                 b2.set(i, j, snap[i][j]);
@@ -376,117 +194,19 @@ public class Level7 implements MoveGenerator {
                     }
                 }
             }
+            // Budget check: stop deepening if budget exceeded
             if (b2.search_nodes > b2.search_budget) {
                 break;
             }
         }
-        if (best_enc < 0) {
-            self.last_x = -1;
-            self.last_y = -1;
-            return b2;
-        }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
-        i32 r = b2.place_stone(mx, my, color);
-        if (r >= 0) {
-            self.last_x = mx;
-            self.last_y = my;
-        } else {
-            self.last_x = -1;
-            self.last_y = -1;
-        }
-        return b2;
+        return best_enc;
     }
 }
 
-// Level 10: same engine as Level 7 with deeper iteration (2..7) and a
-// larger node budget.
-public class Level10 implements MoveGenerator {
-    i32 last_x;
-    i32 last_y;
-
-    public Level10() {
-        self.last_x = -1;
-        self.last_y = -1;
-    }
-
-    public i32 last_x() {
-        return self.last_x;
-    }
-
-    public i32 last_y() {
-        return self.last_y;
-    }
-
-    public Board genmove(Board board, i32 color) {
-        Board b2 = board;
-        i32 opp = b2.opponent(color);
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        i32 best_enc = -1;
-        for (i32 dd = 2; dd <= 7; dd++) {
-            best_enc = -1;
-            i32 best_val = -999999;
-            b2.start_search(1000000);
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        bool is_ko = b2.is_ko_point(x, y);
-                        i32[13][13] snap = {0};
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                snap[i][j] = b2.get(i, j);
-                            }
-                        }
-                        b2.set(x, y, color);
-                        i32 cap = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) == opp) {
-                                    if (b2.count_liberties(nx, ny) == 0) {
-                                        cap = cap + b2.remove_group(nx, ny);
-                                    }
-                                }
-                            }
-                        }
-                        bool alive = b2.count_liberties(x, y) > 0;
-                        i32 val = -999999;
-                        if (alive && !(is_ko && cap == 1)) {
-                            val = b2.minimax(dd - 1, opp, color, -999999, 999999);
-                        }
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                b2.set(i, j, snap[i][j]);
-                            }
-                        }
-                        if (val > best_val) {
-                            best_val = val;
-                            best_enc = x * 13 + y;
-                        }
-                    }
-                }
-            }
-            if (b2.search_nodes > b2.search_budget) {
-                break;
-            }
-        }
-        if (best_enc < 0) {
-            self.last_x = -1;
-            self.last_y = -1;
-            return b2;
-        }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
-        i32 r = b2.place_stone(mx, my, color);
-        if (r >= 0) {
-            self.last_x = mx;
-            self.last_y = my;
-        } else {
-            self.last_x = -1;
-            self.last_y = -1;
-        }
-        return b2;
-    }
+// Factory: create a Level instance for the requested level (1-10)
+public MoveGenerator create_ai(i32 requested_level) {
+    i32 lv = requested_level;
+    if (lv < 1) { lv = 1; }
+    if (lv > 10) { lv = 10; }
+    return new Level(lv);
 }

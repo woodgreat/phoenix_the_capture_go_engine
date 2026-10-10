@@ -22,7 +22,8 @@ const i32 BOARD_CELLS = 169;  // 13 * 13
 const i32 BLACK_TARGET = 6;
 const i32 WHITE_TARGET = 5;
 const i32 INF = 999999;
-const i32 NEG_INF = -999999;
+// Note: Hust transpiler has issue with negative const literals,
+// so we use -INF instead of a separate NEG_INF constant
 
 public class Board {
     i32[BOARD_SIZE][BOARD_SIZE] grid;
@@ -97,7 +98,7 @@ public class Board {
             self.tt_hash.push(0);
             self.tt_score.push(0);
             self.tt_depth.push(0);
-            self.tt_alpha.push(NEG_INF);
+            self.tt_alpha.push(-INF);
             self.tt_beta.push(INF);
         }
     }
@@ -655,7 +656,7 @@ public class Board {
         bool maximizing = color_to_move == ai_color;
         i32 best = INF;
         if (maximizing) {
-            best = NEG_INF;
+            best = -INF;
         }
         bool any_move = false;
         i32 opp = self.opponent(color_to_move);
