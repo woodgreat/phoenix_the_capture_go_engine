@@ -13,8 +13,19 @@
 // a value but tt_hash[] etc. do not exist, so no TT path compiles in.
 // Resume when any of B6/B7/B8/B9 or out-params is fixed.
 
+// === Constants (P0 optimization 2026-10-10) ===
+// Extracted from magic numbers across the codebase.
+// Same-file const supports array dimensions (i32[BOARD_SIZE][BOARD_SIZE]).
+
+const i32 BOARD_SIZE = 13;
+const i32 BOARD_CELLS = 169;  // 13 * 13
+const i32 BLACK_TARGET = 6;
+const i32 WHITE_TARGET = 5;
+const i32 INF = 999999;
+const i32 NEG_INF = -999999;
+
 public class Board {
-    i32[13][13] grid;
+    i32[BOARD_SIZE][BOARD_SIZE] grid;
 
     // Capture counters (victory: black 6, white 5)
     i32 black_captures;
@@ -86,8 +97,8 @@ public class Board {
             self.tt_hash.push(0);
             self.tt_score.push(0);
             self.tt_depth.push(0);
-            self.tt_alpha.push(-999999);
-            self.tt_beta.push(999999);
+            self.tt_alpha.push(NEG_INF);
+            self.tt_beta.push(INF);
         }
     }
 
@@ -98,8 +109,8 @@ public class Board {
         self.move_count = 0;
         self.ko_x = -1;
         self.ko_y = -1;
-        for (i32 i = 0; i < 13; i++) {
-            for (i32 j = 0; j < 13; j++) {
+        for (i32 i = 0; i < BOARD_SIZE; i++) {
+            for (i32 j = 0; j < BOARD_SIZE; j++) {
                 self.grid[i][j] = 0;
             }
         }
@@ -118,7 +129,7 @@ public class Board {
 
     // Coordinate in range check
     public bool is_valid(i32 x, i32 y) {
-        return x >= 0 && x < 13 && y >= 0 && y < 13;
+        return x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE;
     }
 
     // Empty point check (out of range counts as not empty)
@@ -168,19 +179,19 @@ public class Board {
         if (color <= 0) {
             return 0;
         }
-        i32[13][13] seen_stone = {0};
-        i32[13][13] seen_lib = {0};
+        i32[BOARD_SIZE][BOARD_SIZE] seen_stone = {0};
+        i32[BOARD_SIZE][BOARD_SIZE] seen_lib = {0};
         i32[] stack;
         i32[] liblist;
-        stack.push(x * 13 + y);
+        stack.push(x * BOARD_SIZE + y);
         seen_stone[x][y] = 1;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
         while (stack.len() > (usize)0) {
             i32 code = stack[stack.len() - (usize)1];
             stack.truncate(stack.len() - (usize)1);
-            i32 cx = code / 13;
-            i32 cy = code - cx * 13;
+            i32 cx = code / BOARD_SIZE;
+            i32 cy = code - cx * BOARD_SIZE;
             for (i32 d = 0; d < 4; d++) {
                 i32 nx = cx + dxs[d];
                 i32 ny = cy + dys[d];
@@ -188,12 +199,12 @@ public class Board {
                     if (self.grid[nx][ny] == 0) {
                         if (seen_lib[nx][ny] == 0) {
                             seen_lib[nx][ny] = 1;
-                            liblist.push(nx * 13 + ny);
+                            liblist.push(nx * BOARD_SIZE + ny);
                         }
                     } else if (self.grid[nx][ny] == color) {
                         if (seen_stone[nx][ny] == 0) {
                             seen_stone[nx][ny] = 1;
-                            stack.push(nx * 13 + ny);
+                            stack.push(nx * BOARD_SIZE + ny);
                         }
                     }
                 }
@@ -254,9 +265,9 @@ public class Board {
 
         // Save state for rollback (loop copy; field-level 2D assign is
         // not a verified Hust feature)
-        i32[13][13] saved = {0};
-        for (i32 i = 0; i < 13; i++) {
-            for (i32 j = 0; j < 13; j++) {
+        i32[BOARD_SIZE][BOARD_SIZE] saved = {0};
+        for (i32 i = 0; i < BOARD_SIZE; i++) {
+            for (i32 j = 0; j < BOARD_SIZE; j++) {
                 saved[i][j] = self.grid[i][j];
             }
         }
@@ -292,8 +303,8 @@ public class Board {
         // Suicide: own group has no liberties and nothing was captured
         if (captured == 0) {
             if (self.count_liberties(x, y) == 0) {
-                for (i32 i = 0; i < 13; i++) {
-                    for (i32 j = 0; j < 13; j++) {
+                for (i32 i = 0; i < BOARD_SIZE; i++) {
+                    for (i32 j = 0; j < BOARD_SIZE; j++) {
                         self.grid[i][j] = saved[i][j];
                     }
                 }
@@ -308,8 +319,8 @@ public class Board {
         // Ko: single-stone recapture exactly at the previous ko point
         if (captured == 1) {
             if (x == self.ko_x && y == self.ko_y) {
-                for (i32 i = 0; i < 13; i++) {
-                    for (i32 j = 0; j < 13; j++) {
+                for (i32 i = 0; i < BOARD_SIZE; i++) {
+                    for (i32 j = 0; j < BOARD_SIZE; j++) {
                         self.grid[i][j] = saved[i][j];
                     }
                 }
@@ -365,7 +376,7 @@ public class Board {
                 print!(" ");
             }
             print!("{} ", row_num);
-            for (i32 x = 0; x < 13; x++) {
+            for (i32 x = 0; x < BOARD_SIZE; x++) {
                 if (self.grid[x][y] == 0) {
                     print!(". ");
                 } else if (self.grid[x][y] == 1) {
@@ -441,13 +452,13 @@ public class Board {
     // Returns a pseudo-random i32 hash of the current position.
     public i32 zobrist_hash() {
         i32 h = 0;
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
+        for (i32 x = 0; x < BOARD_SIZE; x++) {
+            for (i32 y = 0; y < BOARD_SIZE; y++) {
                 i32 c = self.grid[x][y];
                 if (c == 1) {
-                    h = h ^ self.zobrist_table[(x * 13 + y) as usize];
+                    h = h ^ self.zobrist_table[(x * BOARD_SIZE + y) as usize];
                 } else if (c == 2) {
-                    h = h ^ self.zobrist_table[(169 + x * 13 + y) as usize];
+                    h = h ^ self.zobrist_table[(BOARD_CELLS + x * BOARD_SIZE + y) as usize];
                 }
             }
         }
@@ -493,8 +504,8 @@ public class Board {
         i32 opp_stones = 0;
         i32 my_libs = 0;
         i32 opp_libs = 0;
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
+        for (i32 x = 0; x < BOARD_SIZE; x++) {
+            for (i32 y = 0; y < BOARD_SIZE; y++) {
                 i32 c = self.grid[x][y];
                 if (c == ai_color) {
                     my_stones = my_stones + 1;
@@ -542,8 +553,8 @@ public class Board {
         i32 score = 0;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
+        for (i32 x = 0; x < BOARD_SIZE; x++) {
+            for (i32 y = 0; y < BOARD_SIZE; y++) {
                 if (self.grid[x][y] == 0) {
                     i32 adj = 0;
                     for (i32 d = 0; d < 4; d++) {
@@ -569,8 +580,8 @@ public class Board {
         i32 score = 0;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
+        for (i32 x = 0; x < BOARD_SIZE; x++) {
+            for (i32 y = 0; y < BOARD_SIZE; y++) {
                 if (self.grid[x][y] == color) {
                     for (i32 d = 0; d < 4; d++) {
                         i32 nx = x + dxs[d];
@@ -635,23 +646,23 @@ public class Board {
         }
 
         // entry snapshot (restored after EVERY candidate)
-        i32[13][13] snap = {0};
-        for (i32 i = 0; i < 13; i++) {
-            for (i32 j = 0; j < 13; j++) {
+        i32[BOARD_SIZE][BOARD_SIZE] snap = {0};
+        for (i32 i = 0; i < BOARD_SIZE; i++) {
+            for (i32 j = 0; j < BOARD_SIZE; j++) {
                 snap[i][j] = self.grid[i][j];
             }
         }
         bool maximizing = color_to_move == ai_color;
-        i32 best = 999999;
+        i32 best = INF;
         if (maximizing) {
-            best = -999999;
+            best = NEG_INF;
         }
         bool any_move = false;
         i32 opp = self.opponent(color_to_move);
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
+        for (i32 x = 0; x < BOARD_SIZE; x++) {
+            for (i32 y = 0; y < BOARD_SIZE; y++) {
                 if (self.grid[x][y] == 0) {
                     self.grid[x][y] = color_to_move;
                     for (i32 d = 0; d < 4; d++) {
@@ -667,8 +678,8 @@ public class Board {
                     }
                     any_move = true;
                     i32 val = self.minimax(depth - 1, opp, ai_color, alpha, beta);
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
+                    for (i32 i = 0; i < BOARD_SIZE; i++) {
+                        for (i32 j = 0; j < BOARD_SIZE; j++) {
                             self.grid[i][j] = snap[i][j];
                         }
                     }
