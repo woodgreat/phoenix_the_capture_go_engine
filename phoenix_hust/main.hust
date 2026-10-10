@@ -128,6 +128,8 @@ void main() {
         } else if (cmd == "sc") {
             cmd = "show";
             a1 = "captures";
+        } else if (cmd == "rw") {
+            cmd = "result";
         } else if (cmd == "gb") {
             cmd = "genmove";
             a1 = "black";
@@ -185,7 +187,7 @@ void main() {
                 || a1 == "wood_captures" || a1 == "sc" || a1 == "show"
                 || a1 == "wood_target" || a1 == "wood_game_over"
                 || a1 == "wood_rules" || a1 == "wood_ai_level"
-                || a1 == "set") {
+                || a1 == "set" || a1 == "result" || a1 == "rw") {
                 k = "true";
             }
             println!("={}{}", p, k);
@@ -219,6 +221,8 @@ void main() {
             println!("wood_target");
             println!("wood_game_over");
             println!("wood_rules");
+            println!("result");
+            println!("rw");
             println!("undo");
             println!("final_score");
             println!("fixed_handicap");
@@ -384,6 +388,16 @@ void main() {
                 }
             } else {
                 println!("={}0", p);
+            }
+        } else if (cmd == "result") {
+            // result: simplified game status for UI integration
+            // returns "black" / "white" / "gaming"
+            if (b.black_captures >= 6) {
+                println!("={}black", p);
+            } else if (b.white_captures >= 5) {
+                println!("={}white", p);
+            } else {
+                println!("={}gaming", p);
             }
         } else if (cmd == "wood_rules") {
             println!("={}Wood Capture Go Rules v1.0 (2026-09-13)", p);
