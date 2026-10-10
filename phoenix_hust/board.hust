@@ -37,6 +37,16 @@ public class Board {
     i32 ko_x;
     i32 ko_y;
 
+    // === Transposition Table (TT) fields (2026-10-10) ===
+    // 256-entry TT with linear probing (4 slots), Zobrist hashing.
+    // Resumes the PAUSED TT implementation now that Hust B6-B9 are fixed.
+    i32[] tt_hash;    // 256 entries
+    i32[] tt_score;   // 256 entries
+    i32[] tt_depth;   // 256 entries
+    i32[] tt_alpha;   // 256 entries
+    i32[] tt_beta;    // 256 entries
+    i32[] zobrist_table;  // 338 entries (169 black + 169 white)
+
     // Constructor: scalar fields + twist-cross opening setup.
     // (2026-10-10) A2 fix: ctor now supports full statements, so
     // setup_twist_cross() is called directly instead of requiring the
@@ -51,6 +61,34 @@ public class Board {
         self.search_nodes = 0;
         self.search_budget = 300000;
         self.setup_twist_cross();
+        // Initialize TT arrays (2026-10-10)
+        self.init_search_tables();
+    }
+
+    // Initialize transposition table and Zobrist hashing tables.
+    // Called once from the constructor.
+    public void init_search_tables() {
+        // Zobrist table: 338 pseudo-random values (169 black + 169 white)
+        i32 seed = 88675123;
+        for (i32 i = 0; i < 338; i++) {
+            i64 s = (i64)seed * 1103515245 + 12345;
+            i64 t = s >> 16;
+            i64 t2 = t & 32767;
+            seed = (i32)t2;
+            i32 v = seed;
+            if (v < 0) {
+                v = -v;
+            }
+            self.zobrist_table.push(v);
+        }
+        // TT arrays: 256 entries each
+        for (i32 i = 0; i < 256; i++) {
+            self.tt_hash.push(0);
+            self.tt_score.push(0);
+            self.tt_depth.push(0);
+            self.tt_alpha.push(-999999);
+            self.tt_beta.push(999999);
+        }
     }
 
     // Reset board to the mandatory twist-cross opening position
@@ -397,6 +435,54 @@ public class Board {
     // Zobrist hash (TT support): PAUSED with the TT (Hust B6~B9).
     // Full version archived in test/tt_minimax_reference.hust.
 
+    // === Transposition Table (TT) methods (2026-10-10) ===
+
+    // Zobrist hash: XOR of random values for each stone on the board.
+    // Returns a pseudo-random i32 hash of the current position.
+    public i32 zobrist_hash() {
+        i32 h = 0;
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                i32 c = self.grid[x][y];
+                if (c == 1) {
+                    h = h ^ self.zobrist_table[(x * 13 + y) as usize];
+                } else if (c == 2) {
+                    h = h ^ self.zobrist_table[(169 + x * 13 + y) as usize];
+                }
+            }
+        }
+        return h;
+    }
+
+    // TT write helper: prefer same-hash slot, else the shallowest slot in the probe window.
+    public void tt_write(i32 hash, i32 depth, i32 score, i32 alpha_in, i32 beta_in) {
+        i32 store_idx = 0;
+        if (hash < 0) {
+            store_idx = (0 - hash) % 256;
+        } else {
+            store_idx = hash % 256;
+        }
+        i32 store_slot = store_idx;
+        i32 sp = 0;
+        while (sp < 4) {
+            i32 cur = (store_idx + sp) % 256;
+            if (self.tt_hash[cur as usize] == hash) {
+                store_slot = cur;
+                break;
+            }
+            if (self.tt_depth[cur as usize] < depth) {
+                store_slot = cur;
+                break;
+            }
+            sp = sp + 1;
+        }
+        self.tt_hash[store_slot as usize] = hash;
+        self.tt_score[store_slot as usize] = score;
+        self.tt_depth[store_slot as usize] = depth;
+        self.tt_alpha[store_slot as usize] = alpha_in;
+        self.tt_beta[store_slot as usize] = beta_in;
+    }
+
     // Static evaluation from ai_color's perspective:
     //   stone diff * 10 + liberty attribution diff * 4 + counter diff * 100
     // Stones removed during search are absent from the grid, so the
@@ -506,6 +592,11 @@ public class Board {
     // NOTE (2026-10-09): TT integration PAUSED (Hust B6~B9); the full
     // TT-enabled version is archived in test/tt_minimax_reference.hust.
     // Params are immutable in Hust: alpha/beta are rebound to locals.
+    // Alpha-beta minimax with transposition table (TT) support.
+    // Depth 0 returns the static evaluation. Captures inside the search REALLY remove stones
+    // (via remove_group); each node restores the grid from a snapshot
+    // taken at entry, so the caller sees an unchanged board.
+    // (2026-10-10) TT integration: probes and writes TT entries for cutoff.
     public i32 minimax(i32 depth, i32 color_to_move, i32 ai_color, i32 alpha_in, i32 beta_in) {
         i32 alpha = alpha_in;
         i32 beta = beta_in;
@@ -513,6 +604,36 @@ public class Board {
         if (depth == 0 || self.search_nodes > self.search_budget) {
             return self.evaluate_for(ai_color);
         }
+
+        // TT probe: linear probe 4 slots
+        i32 hash = self.zobrist_hash();
+        i32 idx = 0;
+        if (hash < 0) {
+            idx = (0 - hash) % 256;
+        } else {
+            idx = hash % 256;
+        }
+        i32 probe = 0;
+        while (probe < 4) {
+            i32 slot = (idx + probe) % 256;
+            if (self.tt_hash[slot as usize] == hash && self.tt_depth[slot as usize] >= depth) {
+                i32 tt_val = self.tt_score[slot as usize];
+                if (self.tt_alpha[slot as usize] == self.tt_beta[slot as usize]) {
+                    return tt_val;                       // exact
+                } else if (self.tt_score[slot as usize] <= self.tt_alpha[slot as usize]) {
+                    if (tt_val <= alpha) {
+                        return tt_val;                   // upper bound cutoff
+                    }
+                } else {
+                    if (tt_val >= beta) {
+                        return tt_val;                   // lower bound cutoff
+                    }
+                }
+                break;
+            }
+            probe = probe + 1;
+        }
+
         // entry snapshot (restored after EVERY candidate)
         i32[13][13] snap = {0};
         for (i32 i = 0; i < 13; i++) {
@@ -567,6 +688,7 @@ public class Board {
                         }
                     }
                     if (beta <= alpha) {
+                        self.tt_write(hash, depth, best, alpha_in, beta_in);
                         return best;
                     }
                 }
@@ -575,6 +697,7 @@ public class Board {
         if (!any_move) {
             best = self.evaluate_for(ai_color);
         }
+        self.tt_write(hash, depth, best, alpha_in, beta_in);
         return best;
     }
 }
