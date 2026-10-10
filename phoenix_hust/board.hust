@@ -37,12 +37,10 @@ public class Board {
     i32 ko_x;
     i32 ko_y;
 
-    // Constructor: scalar fields only.
-    // IMPORTANT (Hust transpiler limitation): the ctor body only supports
-    // direct field assignments (self.field = value). Method calls and loops
-    // inside the ctor are silently dropped (translator.rs extracts
-    // `self.field = value;` patterns only). Board setup must be done by
-    // calling setup_twist_cross() explicitly after new.
+    // Constructor: scalar fields + twist-cross opening setup.
+    // (2026-10-10) A2 fix: ctor now supports full statements, so
+    // setup_twist_cross() is called directly instead of requiring the
+    // caller to invoke it after `new Board()`.
     public Board() {
         self.black_captures = 0;
         self.white_captures = 0;
@@ -52,6 +50,7 @@ public class Board {
         self.rng_seed = 88675123;
         self.search_nodes = 0;
         self.search_budget = 300000;
+        self.setup_twist_cross();
     }
 
     // Reset board to the mandatory twist-cross opening position
@@ -125,7 +124,7 @@ public class Board {
     // Count liberties of the connected group at (x, y) via BFS flood fill.
     // A liberty is an empty point adjacent to the group (counted once).
     // Returns 0 for empty points.
-    // Uses static arrays only (&self, no Vec push/mut).
+    // (2026-10-10) B7 fix: use Vec<i32> instead of static arrays
     public i32 count_liberties(i32 x, i32 y) {
         i32 color = self.get(x, y);
         if (color <= 0) {
@@ -133,50 +132,41 @@ public class Board {
         }
         i32[13][13] seen_stone = {0};
         i32[13][13] seen_lib = {0};
-        i32[169] stack = {0};
-        i32[169] liblist = {0};
-        i32 top = 0;
-        i32 ltop = 0;
-        stack[0] = x * 13 + y;
-        top = 1;
+        i32[] stack;
+        i32[] liblist;
+        stack.push(x * 13 + y);
         seen_stone[x][y] = 1;
-        i32 libs = 0;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-        while (top > 0) {
-            top = top - 1;
-            i32 code = stack[top];
+        while (stack.len() > (usize)0) {
+            i32 code = stack[stack.len() - (usize)1];
+            stack.truncate(stack.len() - (usize)1);
             i32 cx = code / 13;
             i32 cy = code - cx * 13;
             for (i32 d = 0; d < 4; d++) {
                 i32 nx = cx + dxs[d];
                 i32 ny = cy + dys[d];
-                // NOTE: never use `continue` inside Hust for-loops!
-                // for -> while translation puts the counter update at the
-                // loop tail, so `continue` skips it and hangs forever.
                 if (self.is_valid(nx, ny)) {
                     if (self.grid[nx][ny] == 0) {
                         if (seen_lib[nx][ny] == 0) {
                             seen_lib[nx][ny] = 1;
-                            liblist[ltop] = nx * 13 + ny;
-                            ltop = ltop + 1;
+                            liblist.push(nx * 13 + ny);
                         }
                     } else if (self.grid[nx][ny] == color) {
                         if (seen_stone[nx][ny] == 0) {
                             seen_stone[nx][ny] = 1;
-                            stack[top] = nx * 13 + ny;
-                            top = top + 1;
+                            stack.push(nx * 13 + ny);
                         }
                     }
                 }
             }
         }
-        return ltop;
+        return (i32)liblist.len();
     }
 
     // Remove the whole connected group at (x, y); returns stones removed.
     // Caller must verify the group has no liberties (capture) first.
-    // Queue: dynamic array (Vec).
+    // (2026-10-10) B7 fix: use Vec<i32> with head pointer (simplest form)
     public i32 remove_group(i32 x, i32 y) {
         i32 color = self.grid[x][y];
         if (color == 0) {
@@ -191,7 +181,7 @@ public class Board {
         i32 count = 1;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-        while (qx.len() > (usize)head) {
+        while (head < (i32)qx.len()) {
             i32 cx = qx[head];
             i32 cy = qy[head];
             head = head + 1;

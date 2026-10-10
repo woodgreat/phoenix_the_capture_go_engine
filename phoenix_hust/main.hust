@@ -58,7 +58,7 @@ void main() {
     }
 
     Board b = new Board();
-    b.setup_twist_cross();
+    // setup_twist_cross() is now called inside the ctor (A2 fix)
     if (!gtp_mode) {
         println!("wood_capture_go_engine_phoenix");
         std::io::Write::flush(&mut std::io::stdout());
