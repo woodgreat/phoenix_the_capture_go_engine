@@ -68,10 +68,10 @@ void main() {
     i32[] hist_cells;   // 169 values per snapshot (x*13+y order)
     i32[] hist_meta;    // 5 values per snapshot: bc, wc, ko_x, ko_y, moves
     i32 ai_level = startup_level;   // clamped through the factory below
-    ai_level = create_ai(ai_level);
     // Unified Level class (2026-10-10): single parameterized class
     // Level 1-10 = depth 1-10, budget from table
-    MoveGenerator ai = create_ai(ai_level);
+    // Hust V0.2.1 fix: use AIWrapper instead of MoveGenerator interface
+    AIWrapper ai = create_ai(ai_level);
 
     i32 empty_streak = 0;
     while (true) {

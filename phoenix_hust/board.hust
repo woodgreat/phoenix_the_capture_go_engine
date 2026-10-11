@@ -26,7 +26,9 @@ const i32 INF = 999999;
 // so we use -INF instead of a separate NEG_INF constant
 
 public class Board {
-    i32[BOARD_SIZE][BOARD_SIZE] grid;
+    // Hust V0.2.1 fix: use literal 13 instead of const BOARD_SIZE for array dims
+    // (const array dims not substituted in generated Rust)
+    i32[13][13] grid;
 
     // Capture counters (victory: black 6, white 5)
     i32 black_captures;
