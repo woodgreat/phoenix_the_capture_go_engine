@@ -443,20 +443,9 @@ void main() {
                 if (mc != 1) {
                     color_str = "W";
                 }
-                // SGF coordinates: letters A-S (skipping I), bottom-left origin
-                i32 sgf_x = mx;
-                i32 sgf_y = 12 - my;
-                u8 x_u8 = (u8)(sgf_x + 65);
-                if (sgf_x >= 8) {
-                    x_u8 = (u8)(sgf_x + 66);
-                }
-                u8 y_u8 = (u8)(sgf_y + 65);
-                if (sgf_y >= 8) {
-                    y_u8 = (u8)(sgf_y + 66);
-                }
-                char x_char = x_u8 as char;
-                char y_char = y_u8 as char;
-                println!("{}[{}{}]", color_str, x_char, y_char);
+                // Use coordinate conversion function
+                String sgf_coord = xy_to_sgf(mx, my);
+                println!("{}[{}]", color_str, sgf_coord);
             }
             std::io::Write::flush(&mut std::io::stdout());
         } else if (cmd == "wood_ai_level" || cmd == "set") {
