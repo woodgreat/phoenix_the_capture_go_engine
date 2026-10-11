@@ -67,6 +67,12 @@ void main() {
     // Undo history stack: one snapshot per successful placement
     i32[] hist_cells;   // 169 values per snapshot (x*13+y order)
     i32[] hist_meta;    // 5 values per snapshot: bc, wc, ko_x, ko_y, moves
+    
+    // Move history for game record/export (prepared for future SGF export)
+    // Format per move: color(1=black,2=white), x, y, captured_count
+    i32[] move_history;  // 4 values per move
+    i32 move_count = 0;
+    
     i32 ai_level = startup_level;   // clamped through the factory below
     // Unified Level class (2026-10-10): single parameterized class
     // Level 1-10 = depth 1-10, budget from table
@@ -222,8 +228,9 @@ void main() {
             println!("result");
             println!("rw");
             println!("undo");
-            println!("final_score");
             println!("fixed_handicap");
+            println!("move_history");
+            println!("export_sgf");
         } else if (cmd == "boardsize") {
             i32 n = str_to_i32(a1.clone());
             if (n == 13) {
@@ -235,6 +242,8 @@ void main() {
             b.clear();
             hist_cells.clear();
             hist_meta.clear();
+            move_history.clear();
+            move_count = 0;
             println!("={}", p);
             board_changed = true;
         } else if (cmd == "komi") {
@@ -303,6 +312,12 @@ void main() {
                     hist_meta.push(b.move_count);
                     i32 r = b.place_stone(x, y, color);
                     if (r >= 0) {
+                        // Record move history: color, x, y, captured_count
+                        move_history.push(color);
+                        move_history.push(x);
+                        move_history.push(y);
+                        move_history.push(r);
+                        move_count = move_count + 1;
                         println!("={}", p);
                         board_changed = true;
                     } else {
@@ -349,9 +364,6 @@ void main() {
             } else {
                 println!("?{}cannot undo", p);
             }
-        } else if (cmd == "final_score") {
-            String s = format_final_score(b.black_captures, b.white_captures);
-            println!("={}{}", p, s.clone());
         } else if (cmd == "wood_captures") {
             println!("={}black={} white={}", p, b.black_captures, b.white_captures);
         } else if (cmd == "wood_target") {
@@ -399,6 +411,54 @@ void main() {
             }
         } else if (cmd == "wood_rules") {
             println!("={}Wood Capture Go Rules v1.0 (2026-09-13)", p);
+        } else if (cmd == "move_history") {
+            // Display move history in simple text format
+            // Format: move_number: color x,y captured_count
+            println!("={}Move history ({} moves):", p, move_count);
+            for (i32 i = 0; i < move_count; i++) {
+                i32 base = i * 4;
+                i32 mc = move_history[base];
+                i32 mx = move_history[base + 1];
+                i32 my = move_history[base + 2];
+                i32 cap = move_history[base + 3];
+                String color_str = "B";
+                if (mc != 1) {
+                    color_str = "W";
+                }
+                String coord = xy_to_gtp(mx, my);
+                println!("{}: {} {} cap={}", i + 1, color_str, coord, cap);
+            }
+        } else if (cmd == "export_sgf") {
+            // Export game in SGF format (prepared for future file export)
+            // Note: Using simple text format to avoid Hust bracket parsing issues
+            println!("=SGF export ({} moves):", move_count);
+            println!("FF=4 GM=1 SZ=13 RU=WoodCaptureGo");
+            println!("PB-Black PW-White");
+            for (i32 i = 0; i < move_count; i++) {
+                i32 base = i * 4;
+                i32 mc = move_history[base];
+                i32 mx = move_history[base + 1];
+                i32 my = move_history[base + 2];
+                String color_str = "B";
+                if (mc != 1) {
+                    color_str = "W";
+                }
+                // SGF coordinates: letters A-S (skipping I), bottom-left origin
+                i32 sgf_x = mx;
+                i32 sgf_y = 12 - my;
+                u8 x_u8 = (u8)(sgf_x + 65);
+                if (sgf_x >= 8) {
+                    x_u8 = (u8)(sgf_x + 66);
+                }
+                u8 y_u8 = (u8)(sgf_y + 65);
+                if (sgf_y >= 8) {
+                    y_u8 = (u8)(sgf_y + 66);
+                }
+                char x_char = x_u8 as char;
+                char y_char = y_u8 as char;
+                println!("{}[{}{}]", color_str, x_char, y_char);
+            }
+            std::io::Write::flush(&mut std::io::stdout());
         } else if (cmd == "wood_ai_level" || cmd == "set") {
             // set ai <N> / set ai level <N> / legacy wood_ai_level <N>
             i32 lv = -1;
@@ -419,6 +479,7 @@ void main() {
             }
             if (ok && lv >= 1 && lv <= 10) {
                 ai_level = lv;
+                ai = create_ai(ai_level);  // Recreate AI with new level
                 println!("={}", p);
             } else {
                 println!("?{}unacceptable level", p);
@@ -446,12 +507,24 @@ void main() {
                 hist_meta.push(b.ko_y);
                 hist_meta.push(b.move_count);
                 // dispatch through the unified AI interface
-                i32 lx = -1;
-                i32 ly = -1;
                 b = ai.genmove(b, color);
-                lx = ai.last_x();
-                ly = ai.last_y();
+                i32 lx = ai.last_x();
+                i32 ly = ai.last_y();
                 if (lx >= 0) {
+                    // Record move history: color, x, y, captured_count
+                    // Calculate captured count from board state change
+                    if (color == 1) {
+                        move_history.push(color);
+                        move_history.push(lx);
+                        move_history.push(ly);
+                        move_history.push(b.white_captures - hist_meta[hist_meta.len() - 4]);
+                    } else {
+                        move_history.push(color);
+                        move_history.push(lx);
+                        move_history.push(ly);
+                        move_history.push(b.black_captures - hist_meta[hist_meta.len() - 5]);
+                    }
+                    move_count = move_count + 1;
                     String coord = xy_to_gtp(lx, ly);
                     println!("={}{}", p, coord.clone());
                     board_changed = true;
