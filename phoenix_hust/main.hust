@@ -402,10 +402,21 @@ void main() {
         } else if (cmd == "result") {
             // result: simplified game status for UI integration
             // returns "black" / "white" / "gaming"
+            // Wood Capture Go rule: first to reach capture target wins
+            // Black needs 6 captures, White needs 5 captures
+            // If board is full, player with more captures wins; equal = White win
             if (b.black_captures >= 6) {
                 println!("={}black", p);
             } else if (b.white_captures >= 5) {
                 println!("={}white", p);
+            } else if (b.move_count >= 169) {
+                // Board full, compare captures
+                if (b.black_captures > b.white_captures) {
+                    println!("={}black", p);
+                } else {
+                    // Equal or White leads = White win
+                    println!("={}white", p);
+                }
             } else {
                 println!("={}gaming", p);
             }
