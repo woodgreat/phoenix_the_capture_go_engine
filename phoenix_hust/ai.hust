@@ -40,6 +40,13 @@ public class Level1 implements MoveGenerator {
         i32 n_empty = 0;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
+        // Save full board state for restoration after virtual placement
+        i32[13][13] saved_grid = {0};
+        for (i32 i = 0; i < 13; i++) {
+            for (i32 j = 0; j < 13; j++) {
+                saved_grid[i][j] = b2.get(i, j);
+            }
+        }
         for (i32 x = 0; x < 13; x++) {
             for (i32 y = 0; y < 13; y++) {
                 if (b2.get(x, y) == 0) {
@@ -59,7 +66,12 @@ public class Level1 implements MoveGenerator {
                         }
                     }
                     bool alive = b2.count_liberties(x, y) > 0;
-                    b2.set(x, y, 0);
+                    // Restore full board state (including captured stones)
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            b2.set(i, j, saved_grid[i][j]);
+                        }
+                    }
                     if (captures || alive) {
                         i32 enc = x * 13 + y;
                         empty_moves[n_empty] = enc;
@@ -192,6 +204,13 @@ public class Level3 implements MoveGenerator {
         i32 best_score = -1000000;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
+        // Save full board state for restoration after virtual placement
+        i32[13][13] saved_grid = {0};
+        for (i32 i = 0; i < 13; i++) {
+            for (i32 j = 0; j < 13; j++) {
+                saved_grid[i][j] = b2.get(i, j);
+            }
+        }
         for (i32 x = 0; x < 13; x++) {
             for (i32 y = 0; y < 13; y++) {
                 if (b2.get(x, y) == 0) {
@@ -216,7 +235,12 @@ public class Level3 implements MoveGenerator {
                     }
                     bool alive = b2.count_liberties(x, y) > 0;
                     i32 self_libs = b2.count_liberties(x, y);
-                    b2.set(x, y, 0);
+                    // Restore full board state (including captured stones)
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            b2.set(i, j, saved_grid[i][j]);
+                        }
+                    }
                     // legality filter
                     bool legal = true;
                     if (!alive && cap == 0) {
