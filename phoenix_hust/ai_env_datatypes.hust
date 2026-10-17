@@ -11,28 +11,23 @@ use board;
 const i32 BLACK = 1;
 const i32 WHITE = 2;
 const i32 EMPTY = 0;
+const i32 INVALID = -1;
 
 // ==================== Group 连通块（最小版本） ====================
 
-// 连通块：同色相邻棋子组成的整体
-// 使用固定数组存储，简化实现
 public class Group {
-    i32 id;                     // 唯一标识（0-based）
-    i32 color;                  // BLACK=1, WHITE=2
-    i32 size;                   // 棋子数量
-    i32 lib_count;              // 气数
-    bool alive;                 // 是否存活
-    
-    // 棋子坐标存储（固定数组，最多 169 个）
+    i32 id;
+    i32 color;
+    i32 size;
+    i32 lib_count;
+    bool alive;
     i32[169] stones;
     i32 stone_count;
-    
-    // 气坐标存储（固定数组，最多 169 个）
     i32[169] libs;
     i32 lib_top;
     
     public Group() {
-        self.id = -1;
+        self.id = INVALID;
         self.color = 0;
         self.size = 0;
         self.lib_count = 0;
@@ -41,7 +36,6 @@ public class Group {
         self.lib_top = 0;
     }
     
-    // 添加棋子
     public void add_stone(i32 enc) {
         if (self.stone_count < 169) {
             self.stones[self.stone_count] = enc;
@@ -50,7 +44,6 @@ public class Group {
         }
     }
     
-    // 添加气（去重）
     public void add_lib(i32 enc) {
         for (i32 i = 0; i < self.lib_top; i++) {
             if (self.libs[i] == enc) {
@@ -64,7 +57,6 @@ public class Group {
         }
     }
     
-    // 更新存活状态
     public void update_alive() {
         self.alive = self.lib_count > 0;
     }
@@ -73,5 +65,5 @@ public class Group {
 // ==================== 主函数 ====================
 
 public void main() {
-    // 空实现，仅用于编译通过
+    // 空实现
 }
