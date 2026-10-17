@@ -1,55 +1,222 @@
-// ai_env_datatypes.hust - AI Engine Core Data Structures (Standalone)
+// ai_env_datatypes.hust - AI Engine Core Data Structures
 //
 // B方案重构：Group/FightGroup/Jie 数据结构
 // 设计日期：2026-10-17
-// 2026-10-17 修订：避免使用 const，规避 Hust 转译器 bug
+// 2026-10-17 修订：避免使用 bool 数组，改用 i32 表示
 
-// ==================== Group 连通块 ====================
+// ==================== GroupManager 管理器 ====================
 
-public class Group {
-    i32 id;
-    i32 color;
-    i32 size;
-    i32 lib_count;
-    bool alive;
-    i32[169] stones;
-    i32 stone_count;
-    i32[169] libs;
-    i32 lib_top;
+// Group 管理器：使用平行数组存储 Group 数据
+public class GroupManager {
+    // 最大 Group 数量
+    i32 max_groups = 169;
     
-    public Group() {
-        self.id = -1;  // -1 = INVALID
-        self.color = 0;
-        self.size = 0;
-        self.lib_count = 0;
-        self.alive = false;
-        self.stone_count = 0;
-        self.lib_top = 0;
-    }
+    // Group 基本属性（平行数组）
+    i32[169] g_id;              // Group ID
+    i32[169] g_color;           // 颜色：1=黑, 2=白
+    i32[169] g_size;            // 棋子数量
+    i32[169] g_lib_count;       // 气数
+    i32[169] g_state;           // 状态：0=死, 1=活
     
-    public void add_stone(i32 enc) {
-        if (self.stone_count < 169) {
-            self.stones[self.stone_count] = enc;
-            self.stone_count = self.stone_count + 1;
-            self.size = self.size + 1;
+    // 棋子存储（一维数组 + 偏移：gid * 169 + si）
+    i32[28561] g_stones;        // 169 * 169 = 28561
+    i32[169] g_stone_count;     // 每个 Group 的棋子数量
+    
+    // 气存储（同样用一维数组 + 偏移）
+    i32[28561] g_libs;
+    i32[169] g_lib_top;         // 每个 Group 的气数量
+    
+    // 当前 Group 数量
+    i32 group_count;
+    
+    // 棋盘辅助：每个位置属于哪个 Group
+    i32[169] belong;
+    
+    public GroupManager() {
+        self.group_count = 0;
+        for (i32 i = 0; i < 169; i++) {
+            self.belong[i] = -1;
+            self.g_id[i] = -1;
+            self.g_color[i] = 0;
+            self.g_size[i] = 0;
+            self.g_lib_count[i] = 0;
+            self.g_state[i] = 0;
+            self.g_stone_count[i] = 0;
+            self.g_lib_top[i] = 0;
         }
     }
     
-    public void add_lib(i32 enc) {
-        for (i32 i = 0; i < self.lib_top; i++) {
-            if (self.libs[i] == enc) {
-                return;
+    // 从棋盘网格全量构建 Group
+    public void build_from_grid(i32[169] grid) {
+        self.clear_all();
+        
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                i32 color = grid[x * 13 + y];
+                if (color != 0) {
+                    i32 enc = x * 13 + y;
+                    if (self.belong[enc] == -1) {
+                        self.flood_fill_group(grid, x, y, color);
+                    }
+                }
             }
         }
-        if (self.lib_top < 169) {
-            self.libs[self.lib_top] = enc;
-            self.lib_top = self.lib_top + 1;
-            self.lib_count = self.lib_count + 1;
+        
+        self.calculate_all_libs(grid);
+    }
+    
+    // 洪水填充构建单个 Group
+    void flood_fill_group(i32[169] grid, i32 sx, i32 sy, i32 color) {
+        if (self.group_count >= 169) {
+            return;
+        }
+        
+        i32 gid = self.group_count;
+        self.g_id[gid] = gid;
+        self.g_color[gid] = color;
+        self.g_size[gid] = 0;
+        self.g_lib_count[gid] = 0;
+        self.g_state[gid] = 0;
+        self.g_stone_count[gid] = 0;
+        self.g_lib_top[gid] = 0;
+        
+        // BFS 队列
+        i32[169] queue = {0};
+        i32 q_head = 0;
+        i32 q_tail = 0;
+        
+        i32 start_enc = sx * 13 + sy;
+        queue[q_tail] = start_enc;
+        q_tail = q_tail + 1;
+        self.belong[start_enc] = gid;
+        
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        
+        while (q_head < q_tail) {
+            i32 cur = queue[q_head];
+            q_head = q_head + 1;
+            
+            i32 cx = cur / 13;
+            i32 cy = cur - cx * 13;
+            
+            // 添加棋子到当前 Group
+            if (self.g_stone_count[gid] < 169) {
+                i32 idx = gid * 169 + self.g_stone_count[gid];
+                self.g_stones[idx] = cur;
+                self.g_stone_count[gid] = self.g_stone_count[gid] + 1;
+                self.g_size[gid] = self.g_size[gid] + 1;
+            }
+            
+            for (i32 d = 0; d < 4; d++) {
+                i32 nx = cx + dxs[d];
+                i32 ny = cy + dys[d];
+                
+                if (nx >= 0 && nx < 13 && ny >= 0 && ny < 13) {
+                    i32 nenc = nx * 13 + ny;
+                    i32 ncolor = grid[nenc];
+                    
+                    if (ncolor == color && self.belong[nenc] == -1) {
+                        queue[q_tail] = nenc;
+                        q_tail = q_tail + 1;
+                        self.belong[nenc] = gid;
+                    }
+                }
+            }
+        }
+        
+        self.group_count = self.group_count + 1;
+    }
+    
+    // 计算所有 Group 的气
+    void calculate_all_libs(i32[169] grid) {
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        
+        for (i32 gi = 0; gi < self.group_count; gi++) {
+            i32 stone_count = self.g_stone_count[gi];
+            
+            for (i32 si = 0; si < stone_count; si++) {
+                i32 idx = gi * 169 + si;
+                i32 enc = self.g_stones[idx];
+                i32 x = enc / 13;
+                i32 y = enc - x * 13;
+                
+                for (i32 d = 0; d < 4; d++) {
+                    i32 nx = x + dxs[d];
+                    i32 ny = y + dys[d];
+                    
+                    if (nx >= 0 && nx < 13 && ny >= 0 && ny < 13) {
+                        if (grid[nx * 13 + ny] == 0) {
+                            // 添加气（去重）
+                            i32 lib_enc = nx * 13 + ny;
+                            bool found = false;
+                            i32 lib_top = self.g_lib_top[gi];
+                            for (i32 li = 0; li < lib_top; li++) {
+                                i32 lidx = gi * 169 + li;
+                                if (self.g_libs[lidx] == lib_enc) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found && lib_top < 169) {
+                                i32 lidx = gi * 169 + lib_top;
+                                self.g_libs[lidx] = lib_enc;
+                                self.g_lib_top[gi] = lib_top + 1;
+                                self.g_lib_count[gi] = self.g_lib_count[gi] + 1;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 更新存活状态：有气即为活
+            if (self.g_lib_count[gi] > 0) {
+                self.g_state[gi] = 1;
+            } else {
+                self.g_state[gi] = 0;
+            }
         }
     }
     
-    public void update_alive() {
-        self.alive = self.lib_count > 0;
+    // 获取位置所属 Group ID
+    public i32 get_group_id_at(i32 enc) {
+        return self.belong[enc];
+    }
+    
+    // 获取 Group 颜色
+    public i32 get_group_color(i32 gid) {
+        return self.g_color[gid];
+    }
+    
+    // 获取 Group 气数
+    public i32 get_group_lib_count(i32 gid) {
+        return self.g_lib_count[gid];
+    }
+    
+    // 检查 Group 是否存活
+    public bool is_group_alive(i32 gid) {
+        return self.g_state[gid] > 0;
+    }
+    
+    // 清空
+    public void clear_all() {
+        self.group_count = 0;
+        for (i32 i = 0; i < 169; i++) {
+            self.belong[i] = -1;
+            self.g_id[i] = -1;
+            self.g_color[i] = 0;
+            self.g_size[i] = 0;
+            self.g_lib_count[i] = 0;
+            self.g_state[i] = 0;
+            self.g_stone_count[i] = 0;
+            self.g_lib_top[i] = 0;
+        }
+    }
+    
+    // 获取 Group 数量
+    public i32 count() {
+        return self.group_count;
     }
 }
 
