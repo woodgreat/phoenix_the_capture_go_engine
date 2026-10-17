@@ -1,19 +1,10 @@
-// ai_env_datatypes.hust - AI Engine Core Data Structures (Minimal)
+// ai_env_datatypes.hust - AI Engine Core Data Structures (Standalone)
 //
 // B方案重构：Group/FightGroup/Jie 数据结构
 // 设计日期：2026-10-17
-// 2026-10-17 修订：最小可编译版本，逐步扩展
+// 2026-10-17 修订：避免使用 const，规避 Hust 转译器 bug
 
-use board;
-
-// ==================== 常量定义 ====================
-
-const i32 BLACK = 1;
-const i32 WHITE = 2;
-const i32 EMPTY = 0;
-const i32 INVALID = -1;
-
-// ==================== Group 连通块（最小版本） ====================
+// ==================== Group 连通块 ====================
 
 public class Group {
     i32 id;
@@ -27,7 +18,7 @@ public class Group {
     i32 lib_top;
     
     public Group() {
-        self.id = INVALID;
+        self.id = -1;  // -1 = INVALID
         self.color = 0;
         self.size = 0;
         self.lib_count = 0;
