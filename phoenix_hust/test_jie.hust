@@ -1,0 +1,84 @@
+// test_jie.hust - Jie class unit tests
+// Phase 1.4 verification
+
+use ai_env_datatypes;
+
+void test_jie() {
+    println!("=== Jie class test ===");
+    
+    // Test 1: Create empty Jie
+    println!("Test 1: Create empty Jie");
+    Jie jie = new Jie();
+    if (jie.id == -1 && jie.state == 0 && jie.ko_x == -1 && jie.ko_y == -1) {
+        println!("  [PASS] Empty Jie created");
+    } else {
+        println!("  [FAIL] Empty Jie: id={}, state={}, ko_x={}, ko_y={}", 
+            jie.id, jie.state, jie.ko_x, jie.ko_y);
+    }
+    
+    // Test 2: Set ko state
+    println!("Test 2: Set ko state");
+    jie.set_ko(5, 7, 1);  // Black ko at (5,7)
+    if (jie.state == 1 && jie.ko_x == 5 && jie.ko_y == 7 && jie.ko_color == 1) {
+        println!("  [PASS] Ko state set: state=1, ko=(5,7), color=1");
+    } else {
+        println!("  [FAIL] Ko state set: state={}, ko=({},{})", 
+            jie.state, jie.ko_x, jie.ko_y);
+    }
+    
+    // Test 3: Check ko point
+    println!("Test 3: Check ko point");
+    if (jie.is_ko_point(5, 7) && !jie.is_ko_point(6, 7)) {
+        println!("  [PASS] Ko point check: (5,7)=true, (6,7)=false");
+    } else {
+        println!("  [FAIL] Ko point check");
+    }
+    
+    // Test 4: Add captured stones
+    println!("Test 4: Add captured stones");
+    jie.add_captured(0);   // (0,0)
+    jie.add_captured(13);  // (0,1)
+    jie.add_captured(26);  // (0,2)
+    if (jie.capture_count == 3 && jie.captured_count == 3) {
+        println!("  [PASS] Captured stones added: capture_count=3");
+    } else {
+        println!("  [FAIL] Captured stones: capture_count={}", jie.capture_count);
+    }
+    
+    // Test 5: Get capture count
+    println!("Test 5: Get capture count");
+    i32 count = jie.get_capture_count();
+    if (count == 3) {
+        println!("  [PASS] Get capture count: count=3");
+    } else {
+        println!("  [FAIL] Get capture count: count={}", count);
+    }
+    
+    // Test 6: Clear ko state
+    println!("Test 6: Clear ko state");
+    jie.clear_ko();
+    if (jie.state == 0 && jie.ko_x == -1 && jie.ko_y == -1 && jie.ko_color == 0) {
+        println!("  [PASS] Ko state cleared");
+    } else {
+        println!("  [FAIL] Ko state cleared: state={}, ko=({},{})", 
+            jie.state, jie.ko_x, jie.ko_y);
+    }
+    
+    // Test 7: Clear Jie
+    println!("Test 7: Clear Jie");
+    jie.set_ko(3, 3, 2);  // White ko at (3,3)
+    jie.add_captured(50);
+    jie.clear();
+    if (jie.id == -1 && jie.state == 0 && jie.ko_x == -1 && jie.ko_y == -1 && 
+        jie.ko_color == 0 && jie.capture_count == 0 && jie.captured_count == 0) {
+        println!("  [PASS] Jie cleared");
+    } else {
+        println!("  [FAIL] Jie cleared");
+    }
+    
+    println!("=== Jie test completed ===");
+}
+
+void main() {
+    test_jie();
+}

@@ -1,0 +1,85 @@
+// test_fight_group.hust - FightGroup class unit tests
+// Phase 1.4 verification
+
+use ai_env_datatypes;
+
+void test_fight_group() {
+    println!("=== FightGroup class test ===");
+    
+    // Test 1: Create empty FightGroup
+    println!("Test 1: Create empty FightGroup");
+    FightGroup fg = new FightGroup();
+    if (fg.id == -1 && fg.color == 0 && fg.group_count == 0) {
+        println!("  [PASS] Empty FightGroup created");
+    } else {
+        println!("  [FAIL] Empty FightGroup: id={}, color={}, group_count={}", fg.id, fg.color, fg.group_count);
+    }
+    
+    // Test 2: Create Group and add to FightGroup
+    println!("Test 2: Create Group and add to FightGroup");
+    Group g1 = new Group();
+    g1.id = 0;
+    g1.color = 1;  // Black
+    g1.size = 5;
+    g1.lib_count = 3;
+    g1.state = 1;
+    
+    fg.add_group(g1.clone());  // Clone to avoid move
+    if (fg.group_count == 1 && fg.total_size == 5 && fg.total_libs == 3) {
+        println!("  [PASS] Group added: group_count=1, total_size=5, total_libs=3");
+    } else {
+        println!("  [FAIL] Group added: group_count={}, total_size={}, total_libs={}", 
+            fg.group_count, fg.total_size, fg.total_libs);
+    }
+    
+    // Test 3: Add another Group
+    println!("Test 3: Add another Group");
+    Group g2 = new Group();
+    g2.id = 1;
+    g2.color = 1;  // Black
+    g2.size = 3;
+    g2.lib_count = 2;
+    g2.state = 1;
+    
+    fg.add_group(g2.clone());  // Clone to avoid move
+    if (fg.group_count == 2 && fg.total_size == 8 && fg.total_libs == 5) {
+        println!("  [PASS] Second Group added: group_count=2, total_size=8, total_libs=5");
+    } else {
+        println!("  [FAIL] Second Group added: group_count={}, total_size={}, total_libs={}", 
+            fg.group_count, fg.total_size, fg.total_libs);
+    }
+    
+    // Test 4: Add duplicate Group (should not increase count)
+    println!("Test 4: Add duplicate Group");
+    fg.add_group(g1.clone());  // Add g1 again (clone to avoid move)
+    if (fg.group_count == 2) {
+        println!("  [PASS] Duplicate Group ignored: group_count=2");
+    } else {
+        println!("  [FAIL] Duplicate Group: group_count={}", fg.group_count);
+    }
+    
+    // Test 5: Update state
+    println!("Test 5: Update state");
+    fg.update_state();
+    if (fg.state == 1) {  // Has liberties, so alive
+        println!("  [PASS] State updated: state=1 (alive)");
+    } else {
+        println!("  [FAIL] State updated: state={}", fg.state);
+    }
+    
+    // Test 6: Clear FightGroup
+    println!("Test 6: Clear FightGroup");
+    fg.clear();
+    if (fg.id == -1 && fg.color == 0 && fg.group_count == 0 && fg.total_size == 0) {
+        println!("  [PASS] FightGroup cleared");
+    } else {
+        println!("  [FAIL] FightGroup cleared: id={}, color={}, group_count={}, total_size={}", 
+            fg.id, fg.color, fg.group_count, fg.total_size);
+    }
+    
+    println!("=== FightGroup test completed ===");
+}
+
+void main() {
+    test_fight_group();
+}
