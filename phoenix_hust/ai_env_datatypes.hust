@@ -248,4 +248,198 @@ public class GroupManager {
     }
 }
 
+// ==================== FightGroup 类 ====================
+
+// FightGroup：战斗组（多个 Group 的集合，用于评估战斗形势）
+// 设计目标：
+// 1. 跟踪黑白双方的纠缠 Group
+// 2. 计算战斗形势（气数、棋子数、眼位等）
+// 3. 支持 DFS+αβ剪枝的局部战斗评估
+public class FightGroup {
+    i32 id;                     // FightGroup ID
+    i32 color;                  // 主导颜色：1=黑, 2=白
+    i32 state;                  // 状态：0=死, 1=活, 2=劫
+    Group[] groups;             // 包含的 Group 列表（动态数组）
+    i32 group_count;            // Group 数量
+    i32 total_size;             // 总棋子数
+    i32 total_libs;             // 总气数
+    i32 eye_count;              // 眼位数量
+    i32[169] stones;            // 所有棋子位置（去重）
+    i32 stone_count;            // 棋子数量（实际）
+    
+    public FightGroup() {
+        self.id = -1;
+        self.color = 0;
+        self.state = 0;
+        self.group_count = 0;
+        self.total_size = 0;
+        self.total_libs = 0;
+        self.eye_count = 0;
+        self.stone_count = 0;
+    }
+    
+    // 添加 Group 到战斗组
+    public void add_group(Group g) {
+        // 检查是否已存在
+        for (i32 i = 0; i < self.group_count; i++) {
+            if (self.groups[i].id == g.id) {
+                return;
+            }
+        }
+        
+        // 保存 Group 属性（避免 move 后使用）
+        i32 g_size = g.size;
+        i32 g_lib_count = g.lib_count;
+        i32 g_color = g.color;
+        
+        // 添加新 Group
+        self.groups.push(g);
+        self.group_count = self.group_count + 1;
+        self.total_size = self.total_size + g_size;
+        self.total_libs = self.total_libs + g_lib_count;
+        
+        // 更新颜色（以第一个 Group 的颜色为准）
+        if (self.color == 0) {
+            self.color = g_color;
+        }
+    }
+    
+    // 计算眼位数量（简化版：检查每个气是否是眼）
+    public void calculate_eyes(i32[169] grid) {
+        self.eye_count = 0;
+        
+        // 检查每个气是否是眼
+        for (i32 gi = 0; gi < self.group_count; gi++) {
+            Group g = self.groups[gi].clone();
+            for (i32 li = 0; li < g.lib_top; li++) {
+                i32 lib_enc = g.libs[li];
+                if (self.is_eye(grid, lib_enc)) {
+                    self.eye_count = self.eye_count + 1;
+                }
+            }
+        }
+    }
+    
+    // 检查位置是否是眼（简化版）
+    bool is_eye(i32[169] grid, i32 enc) {
+        i32 x = enc / 13;
+        i32 y = enc - x * 13;
+        
+        // 检查四个方向是否都是己方棋子
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        
+        for (i32 d = 0; d < 4; d++) {
+            i32 nx = x + dxs[d];
+            i32 ny = y + dys[d];
+            
+            if (nx >= 0 && nx < 13 && ny >= 0 && ny < 13) {
+                i32 nenc = nx * 13 + ny;
+                if (grid[nenc] != self.color) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    
+    // 更新存活状态
+    public void update_state() {
+        if (self.total_libs > 0) {
+            self.state = 1;
+        } else {
+            self.state = 0;
+        }
+    }
+    
+    // 清空 FightGroup
+    public void clear() {
+        self.id = -1;
+        self.color = 0;
+        self.state = 0;
+        self.group_count = 0;
+        self.total_size = 0;
+        self.total_libs = 0;
+        self.eye_count = 0;
+        self.stone_count = 0;
+        while (self.groups.len() > 0) {
+            self.groups.pop();
+        }
+    }
+}
+
+// ==================== Jie 类 ====================
+
+// Jie：打劫状态
+// 设计目标：
+// 1. 记录打劫位置和颜色
+// 2. 支持打劫规则检查
+// 3. 支持劫争解决
+public class Jie {
+    i32 id;                     // Jie ID
+    i32 state;                  // 状态：0=无劫, 1=有劫, 2=劫争解决
+    i32 ko_x;                   // 劫位置 x
+    i32 ko_y;                   // 劫位置 y
+    i32 ko_color;               // 劫颜色：1=黑, 2=白
+    i32 capture_count;          // 提子数量
+    i32[169] captured_stones;   // 被提棋子位置
+    i32 captured_count;         // 被提棋子数量（实际）
+    
+    public Jie() {
+        self.id = -1;
+        self.state = 0;
+        self.ko_x = -1;
+        self.ko_y = -1;
+        self.ko_color = 0;
+        self.capture_count = 0;
+        self.captured_count = 0;
+    }
+    
+    // 设置劫状态
+    public void set_ko(i32 x, i32 y, i32 color) {
+        self.state = 1;
+        self.ko_x = x;
+        self.ko_y = y;
+        self.ko_color = color;
+    }
+    
+    // 清除劫状态
+    public void clear_ko() {
+        self.state = 0;
+        self.ko_x = -1;
+        self.ko_y = -1;
+        self.ko_color = 0;
+    }
+    
+    // 检查是否是劫位置
+    public readonly bool is_ko_point(i32 x, i32 y) {
+        return self.state == 1 && self.ko_x == x && self.ko_y == y;
+    }
+    
+    // 添加被提棋子
+    public void add_captured(i32 enc) {
+        if (self.captured_count < 169) {
+            self.captured_stones[self.captured_count] = enc;
+            self.captured_count = self.captured_count + 1;
+            self.capture_count = self.capture_count + 1;
+        }
+    }
+    
+    // 获取被提棋子数量（readonly）
+    public readonly i32 get_capture_count() {
+        return self.capture_count;
+    }
+    
+    // 清空 Jie
+    public void clear() {
+        self.id = -1;
+        self.state = 0;
+        self.ko_x = -1;
+        self.ko_y = -1;
+        self.ko_color = 0;
+        self.capture_count = 0;
+        self.captured_count = 0;
+    }
+}
+
 // ==================== 结束 ====================
