@@ -1,0 +1,78 @@
+// test_fight_group_manager.hust - FightGroupManager class unit tests
+// Phase 1.5 verification
+
+use ai_env_datatypes;
+
+void test_fight_group_manager() {
+    println!("=== FightGroupManager class test ===");
+    
+    // Test 1: Create empty FightGroupManager
+    println!("Test 1: Create empty FightGroupManager");
+    FightGroupManager fgm = new FightGroupManager();
+    if (fgm.fight_group_count == 0) {
+        println!("  [PASS] Empty FightGroupManager created");
+    } else {
+        println!("  [FAIL] Empty FightGroupManager: fight_group_count={}", fgm.fight_group_count);
+    }
+    
+    // Test 2: Create FightGroup
+    println!("Test 2: Create FightGroup");
+    FightGroup fg1 = fgm.create_fight_group();
+    if (fg1.id == 0 && fgm.fight_group_count == 1) {
+        println!("  [PASS] FightGroup created: id=0, count=1");
+    } else {
+        println!("  [FAIL] FightGroup created: id={}, count={}", fg1.id, fgm.fight_group_count);
+    }
+    
+    // Test 3: Create another FightGroup
+    println!("Test 3: Create another FightGroup");
+    FightGroup fg2 = fgm.create_fight_group();
+    if (fg2.id == 1 && fgm.fight_group_count == 2) {
+        println!("  [PASS] Second FightGroup created: id=1, count=2");
+    } else {
+        println!("  [FAIL] Second FightGroup created: id={}, count={}", fg2.id, fgm.fight_group_count);
+    }
+    
+    // Test 4: Get FightGroup count
+    println!("Test 4: Get FightGroup count");
+    i32 count = fgm.count();
+    if (count == 2) {
+        println!("  [PASS] FightGroup count: count=2");
+    } else {
+        println!("  [FAIL] FightGroup count: count={}", count);
+    }
+    
+    // Test 5: Get valid FightGroup count
+    println!("Test 5: Get valid FightGroup count");
+    i32 valid = fgm.valid_count();
+    if (valid == 2) {
+        println!("  [PASS] Valid FightGroup count: valid=2");
+    } else {
+        println!("  [FAIL] Valid FightGroup count: valid={}", valid);
+    }
+    
+    // Test 6: Delete FightGroup
+    println!("Test 6: Delete FightGroup");
+    fgm.delete_fight_group(0);
+    i32 valid_after_delete = fgm.valid_count();
+    if (valid_after_delete == 1) {
+        println!("  [PASS] FightGroup deleted: valid=1");
+    } else {
+        println!("  [FAIL] FightGroup deleted: valid={}", valid_after_delete);
+    }
+    
+    // Test 7: Clear all FightGroups
+    println!("Test 7: Clear all FightGroups");
+    fgm.clear_all();
+    if (fgm.fight_group_count == 0) {
+        println!("  [PASS] All FightGroups cleared");
+    } else {
+        println!("  [FAIL] All FightGroups cleared: fight_group_count={}", fgm.fight_group_count);
+    }
+    
+    println!("=== FightGroupManager test completed ===");
+}
+
+void main() {
+    test_fight_group_manager();
+}

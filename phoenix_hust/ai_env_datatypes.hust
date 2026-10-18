@@ -442,4 +442,170 @@ public class Jie {
     }
 }
 
+// ==================== FightGroupManager 类 ====================
+
+// FightGroupManager：战斗组管理器
+// 设计目标：
+// 1. 管理多个 FightGroup
+// 2. 提供 FightGroup 的创建、查询、更新、删除功能
+// 3. 支持战斗形势评估
+public class FightGroupManager {
+    FightGroup[] fight_groups;      // FightGroup 动态数组
+    i32 fight_group_count;          // FightGroup 数量
+    
+    public FightGroupManager() {
+        self.fight_group_count = 0;
+    }
+    
+    // 创建新 FightGroup
+    public FightGroup create_fight_group() {
+        FightGroup fg = new FightGroup();
+        fg.id = self.fight_group_count;
+        
+        // 保存 id（避免 move 后使用）
+        i32 fg_id = fg.id;
+        
+        self.fight_groups.push(fg);
+        self.fight_group_count = self.fight_group_count + 1;
+        
+        // 返回新创建的 FightGroup（重新获取）
+        return self.fight_groups[self.fight_group_count - 1].clone();
+    }
+    
+    // 获取 FightGroup 数量（readonly）
+    public readonly i32 count() {
+        return self.fight_group_count;
+    }
+    
+    // 获取 FightGroup（readonly）
+    public readonly FightGroup get_fight_group(i32 id) {
+        return self.fight_groups[id].clone();
+    }
+    
+    // 更新 FightGroup
+    public void update_fight_group(i32 id, FightGroup fg) {
+        self.fight_groups.replaceit(id, fg);
+    }
+    
+    // 删除 FightGroup
+    public void delete_fight_group(i32 id) {
+        // 简化实现：标记为无效
+        FightGroup fg = self.fight_groups[id].clone();
+        fg.id = -1;
+        self.fight_groups.replaceit(id, fg);
+    }
+    
+    // 清空所有 FightGroup
+    public void clear_all() {
+        self.fight_group_count = 0;
+        while (self.fight_groups.len() > 0) {
+            self.fight_groups.pop();
+        }
+    }
+    
+    // 获取有效 FightGroup 数量（readonly）
+    public readonly i32 valid_count() {
+        i32 count = 0;
+        for (i32 i = 0; i < self.fight_group_count; i++) {
+            if (self.fight_groups[i].id >= 0) {
+                count = count + 1;
+            }
+        }
+        return count;
+    }
+}
+
+// ==================== JieManager 类 ====================
+
+// JieManager：打劫管理器
+// 设计目标：
+// 1. 管理多个 Jie
+// 2. 提供 Jie 的创建、查询、更新、删除功能
+// 3. 支持打劫规则检查
+public class JieManager {
+    Jie[] jies;                     // Jie 动态数组
+    i32 jie_count;                  // Jie 数量
+    
+    public JieManager() {
+        self.jie_count = 0;
+    }
+    
+    // 创建新 Jie
+    public Jie create_jie() {
+        Jie jie = new Jie();
+        jie.id = self.jie_count;
+        
+        // 保存 id（避免 move 后使用）
+        i32 jie_id = jie.id;
+        
+        self.jies.push(jie);
+        self.jie_count = self.jie_count + 1;
+        
+        // 返回新创建的 Jie（重新获取）
+        return self.jies[self.jie_count - 1].clone();
+    }
+    
+    // 获取 Jie 数量（readonly）
+    public readonly i32 count() {
+        return self.jie_count;
+    }
+    
+    // 获取 Jie（readonly）
+    public readonly Jie get_jie(i32 id) {
+        return self.jies[id].clone();
+    }
+    
+    // 更新 Jie
+    public void update_jie(i32 id, Jie jie) {
+        self.jies.replaceit(id, jie);
+    }
+    
+    // 删除 Jie
+    public void delete_jie(i32 id) {
+        // 简化实现：标记为无效
+        Jie jie = self.jies[id].clone();
+        jie.id = -1;
+        self.jies.replaceit(id, jie);
+    }
+    
+    // 清空所有 Jie
+    public void clear_all() {
+        self.jie_count = 0;
+        while (self.jies.len() > 0) {
+            self.jies.pop();
+        }
+    }
+    
+    // 获取有效 Jie 数量（readonly）
+    public readonly i32 valid_count() {
+        i32 count = 0;
+        for (i32 i = 0; i < self.jie_count; i++) {
+            if (self.jies[i].id >= 0) {
+                count = count + 1;
+            }
+        }
+        return count;
+    }
+    
+    // 检查是否有劫（readonly）
+    public readonly bool has_ko() {
+        for (i32 i = 0; i < self.jie_count; i++) {
+            if (self.jies[i].state == 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    // 获取当前劫（readonly）
+    public readonly Jie get_current_ko() {
+        for (i32 i = 0; i < self.jie_count; i++) {
+            if (self.jies[i].state == 1) {
+                return self.jies[i].clone();
+            }
+        }
+        return new Jie();
+    }
+}
+
 // ==================== 结束 ====================

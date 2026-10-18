@@ -1,0 +1,108 @@
+// test_jie_manager.hust - JieManager class unit tests
+// Phase 1.5 verification
+
+use ai_env_datatypes;
+
+void test_jie_manager() {
+    println!("=== JieManager class test ===");
+    
+    // Test 1: Create empty JieManager
+    println!("Test 1: Create empty JieManager");
+    JieManager jm = new JieManager();
+    if (jm.jie_count == 0) {
+        println!("  [PASS] Empty JieManager created");
+    } else {
+        println!("  [FAIL] Empty JieManager: jie_count={}", jm.jie_count);
+    }
+    
+    // Test 2: Create Jie
+    println!("Test 2: Create Jie");
+    Jie jie1 = jm.create_jie();
+    if (jie1.id == 0 && jm.jie_count == 1) {
+        println!("  [PASS] Jie created: id=0, count=1");
+    } else {
+        println!("  [FAIL] Jie created: id={}, count={}", jie1.id, jm.jie_count);
+    }
+    
+    // Test 3: Create another Jie
+    println!("Test 3: Create another Jie");
+    Jie jie2 = jm.create_jie();
+    if (jie2.id == 1 && jm.jie_count == 2) {
+        println!("  [PASS] Second Jie created: id=1, count=2");
+    } else {
+        println!("  [FAIL] Second Jie created: id={}, count={}", jie2.id, jm.jie_count);
+    }
+    
+    // Test 4: Get Jie count
+    println!("Test 4: Get Jie count");
+    i32 count = jm.count();
+    if (count == 2) {
+        println!("  [PASS] Jie count: count=2");
+    } else {
+        println!("  [FAIL] Jie count: count={}", count);
+    }
+    
+    // Test 5: Check has_ko (should be false)
+    println!("Test 5: Check has_ko (should be false)");
+    bool has_ko = jm.has_ko();
+    if (!has_ko) {
+        println!("  [PASS] has_ko: false");
+    } else {
+        println!("  [FAIL] has_ko: true");
+    }
+    
+    // Test 6: Set ko and check has_ko
+    println!("Test 6: Set ko and check has_ko");
+    jie1.set_ko(3, 3, 1);  // Black ko at (3,3)
+    jm.update_jie(0, jie1);
+    has_ko = jm.has_ko();
+    if (has_ko) {
+        println!("  [PASS] has_ko after set: true");
+    } else {
+        println!("  [FAIL] has_ko after set: false");
+    }
+    
+    // Test 7: Get current ko
+    println!("Test 7: Get current ko");
+    Jie current_ko = jm.get_current_ko();
+    if (current_ko.state == 1 && current_ko.ko_x == 3 && current_ko.ko_y == 3) {
+        println!("  [PASS] Current ko: state=1, ko=(3,3)");
+    } else {
+        println!("  [FAIL] Current ko: state={}, ko=({},{})", 
+            current_ko.state, current_ko.ko_x, current_ko.ko_y);
+    }
+    
+    // Test 8: Get valid Jie count
+    println!("Test 8: Get valid Jie count");
+    i32 valid = jm.valid_count();
+    if (valid == 2) {
+        println!("  [PASS] Valid Jie count: valid=2");
+    } else {
+        println!("  [FAIL] Valid Jie count: valid={}", valid);
+    }
+    
+    // Test 9: Delete Jie
+    println!("Test 9: Delete Jie");
+    jm.delete_jie(0);
+    i32 valid_after_delete = jm.valid_count();
+    if (valid_after_delete == 1) {
+        println!("  [PASS] Jie deleted: valid=1");
+    } else {
+        println!("  [FAIL] Jie deleted: valid={}", valid_after_delete);
+    }
+    
+    // Test 10: Clear all Jies
+    println!("Test 10: Clear all Jies");
+    jm.clear_all();
+    if (jm.jie_count == 0) {
+        println!("  [PASS] All Jies cleared");
+    } else {
+        println!("  [FAIL] All Jies cleared: jie_count={}", jm.jie_count);
+    }
+    
+    println!("=== JieManager test completed ===");
+}
+
+void main() {
+    test_jie_manager();
+}
