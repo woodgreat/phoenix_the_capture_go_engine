@@ -3,46 +3,93 @@
 // B方案重构：Group/FightGroup/Jie 数据结构
 // 设计日期：2026-10-17
 // 2026-10-17 修订：避免使用 bool 数组，改用 i32 表示
+// 2026-10-17 Phase 1.3：改为 Group 对象数组 + .replaceit()
+
+// ==================== Group 类 ====================
+
+// Group：棋子组（含棋子列表和气列表）
+public class Group {
+    i32 id;                 // Group ID
+    i32 color;              // 颜色：1=黑, 2=白
+    i32 size;               // 棋子数量
+    i32 lib_count;          // 气数
+    i32 state;              // 状态：0=死, 1=活
+    i32[169] stones;        // 棋子位置列表（编码：x*13+y）
+    i32 stone_count;        // 棋子数量（实际）
+    i32[169] libs;          // 气位置列表
+    i32 lib_top;            // 气数量（实际）
+    
+    public Group() {
+        self.id = -1;
+        self.color = 0;
+        self.size = 0;
+        self.lib_count = 0;
+        self.state = 0;
+        self.stone_count = 0;
+        self.lib_top = 0;
+    }
+    
+    // 添加棋子
+    public void add_stone(i32 enc) {
+        if (self.stone_count < 169) {
+            self.stones[self.stone_count] = enc;
+            self.stone_count = self.stone_count + 1;
+            self.size = self.size + 1;
+        }
+    }
+    
+    // 添加气（去重）
+    public bool add_lib(i32 enc) {
+        // 检查是否已存在
+        for (i32 i = 0; i < self.lib_top; i++) {
+            if (self.libs[i] == enc) {
+                return false;
+            }
+        }
+        // 添加新气
+        if (self.lib_top < 169) {
+            self.libs[self.lib_top] = enc;
+            self.lib_top = self.lib_top + 1;
+            self.lib_count = self.lib_count + 1;
+            return true;
+        }
+        return false;
+    }
+    
+    // 更新存活状态（有气即为活）
+    public void update_state() {
+        if (self.lib_count > 0) {
+            self.state = 1;
+        } else {
+            self.state = 0;
+        }
+    }
+    
+    // 清空 Group
+    public void clear() {
+        self.id = -1;
+        self.color = 0;
+        self.size = 0;
+        self.lib_count = 0;
+        self.state = 0;
+        self.stone_count = 0;
+        self.lib_top = 0;
+    }
+}
 
 // ==================== GroupManager 管理器 ====================
 
-// Group 管理器：使用平行数组存储 Group 数据
+// Group 管理器：使用 Group 对象动态数组存储（V0.2.5+）
 public class GroupManager {
-    // 最大 Group 数量
-    i32 max_groups = 169;
-    
-    // Group 基本属性（平行数组）
-    i32[169] g_id;              // Group ID
-    i32[169] g_color;           // 颜色：1=黑, 2=白
-    i32[169] g_size;            // 棋子数量
-    i32[169] g_lib_count;       // 气数
-    i32[169] g_state;           // 状态：0=死, 1=活
-    
-    // 棋子存储（一维数组 + 偏移：gid * 169 + si）
-    i32[28561] g_stones;        // 169 * 169 = 28561
-    i32[169] g_stone_count;     // 每个 Group 的棋子数量
-    
-    // 气存储（同样用一维数组 + 偏移）
-    i32[28561] g_libs;
-    i32[169] g_lib_top;         // 每个 Group 的气数量
-    
-    // 当前 Group 数量
-    i32 group_count;
-    
-    // 棋盘辅助：每个位置属于哪个 Group
-    i32[169] belong;
+    Group[] groups;             // Group 对象动态数组（Hust V0.2.5+）
+    i32 group_count;            // 当前 Group 数量
+    i32[169] belong;            // 每个位置属于哪个 Group（-1 = 无）
     
     public GroupManager() {
         self.group_count = 0;
+        // groups 是动态数组，默认即为空，无需初始化
         for (i32 i = 0; i < 169; i++) {
             self.belong[i] = -1;
-            self.g_id[i] = -1;
-            self.g_color[i] = 0;
-            self.g_size[i] = 0;
-            self.g_lib_count[i] = 0;
-            self.g_state[i] = 0;
-            self.g_stone_count[i] = 0;
-            self.g_lib_top[i] = 0;
         }
     }
     
@@ -67,18 +114,12 @@ public class GroupManager {
     
     // 洪水填充构建单个 Group
     void flood_fill_group(i32[169] grid, i32 sx, i32 sy, i32 color) {
-        if (self.group_count >= 169) {
-            return;
-        }
-        
         i32 gid = self.group_count;
-        self.g_id[gid] = gid;
-        self.g_color[gid] = color;
-        self.g_size[gid] = 0;
-        self.g_lib_count[gid] = 0;
-        self.g_state[gid] = 0;
-        self.g_stone_count[gid] = 0;
-        self.g_lib_top[gid] = 0;
+        
+        // 创建新 Group
+        Group new_group = new Group();
+        new_group.id = gid;
+        new_group.color = color;
         
         // BFS 队列
         i32[169] queue = {0};
@@ -101,12 +142,7 @@ public class GroupManager {
             i32 cy = cur - cx * 13;
             
             // 添加棋子到当前 Group
-            if (self.g_stone_count[gid] < 169) {
-                i32 idx = gid * 169 + self.g_stone_count[gid];
-                self.g_stones[idx] = cur;
-                self.g_stone_count[gid] = self.g_stone_count[gid] + 1;
-                self.g_size[gid] = self.g_size[gid] + 1;
-            }
+            new_group.add_stone(cur);
             
             for (i32 d = 0; d < 4; d++) {
                 i32 nx = cx + dxs[d];
@@ -125,6 +161,8 @@ public class GroupManager {
             }
         }
         
+        // 使用 push() 添加新 Group 到动态数组
+        self.groups.push(new_group);
         self.group_count = self.group_count + 1;
     }
     
@@ -134,11 +172,11 @@ public class GroupManager {
         i32[4] dys = {1, -1, 0, 0};
         
         for (i32 gi = 0; gi < self.group_count; gi++) {
-            i32 stone_count = self.g_stone_count[gi];
+            // 获取当前 Group 的副本
+            Group g = self.groups[gi].clone();
             
-            for (i32 si = 0; si < stone_count; si++) {
-                i32 idx = gi * 169 + si;
-                i32 enc = self.g_stones[idx];
+            for (i32 si = 0; si < g.stone_count; si++) {
+                i32 enc = g.stones[si];
                 i32 x = enc / 13;
                 i32 y = enc - x * 13;
                 
@@ -148,80 +186,66 @@ public class GroupManager {
                     
                     if (nx >= 0 && nx < 13 && ny >= 0 && ny < 13) {
                         if (grid[nx * 13 + ny] == 0) {
-                            // 添加气（去重）
                             i32 lib_enc = nx * 13 + ny;
-                            bool found = false;
-                            i32 lib_top = self.g_lib_top[gi];
-                            for (i32 li = 0; li < lib_top; li++) {
-                                i32 lidx = gi * 169 + li;
-                                if (self.g_libs[lidx] == lib_enc) {
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if (!found && lib_top < 169) {
-                                i32 lidx = gi * 169 + lib_top;
-                                self.g_libs[lidx] = lib_enc;
-                                self.g_lib_top[gi] = lib_top + 1;
-                                self.g_lib_count[gi] = self.g_lib_count[gi] + 1;
-                            }
+                            g.add_lib(lib_enc);
                         }
                     }
                 }
             }
             
-            // 更新存活状态：有气即为活
-            if (self.g_lib_count[gi] > 0) {
-                self.g_state[gi] = 1;
-            } else {
-                self.g_state[gi] = 0;
-            }
+            // 更新存活状态
+            g.update_state();
+            
+            // 使用 .replaceit() 更新 Group（动态数组支持）
+            self.groups.replaceit(gi, g);
         }
     }
     
-    // 获取位置所属 Group ID
-    public i32 get_group_id_at(i32 enc) {
+    // 获取位置所属 Group ID（readonly：只读查询）
+    public readonly i32 get_group_id_at(i32 enc) {
         return self.belong[enc];
     }
     
-    // 获取 Group 颜色
-    public i32 get_group_color(i32 gid) {
-        return self.g_color[gid];
+    // 获取 Group 颜色（readonly：只读查询）
+    public readonly i32 get_group_color(i32 gid) {
+        Group g = self.groups[gid].clone();
+        return g.color;
     }
     
-    // 获取 Group 气数
-    public i32 get_group_lib_count(i32 gid) {
-        return self.g_lib_count[gid];
+    // 获取 Group 气数（readonly：只读查询）
+    public readonly i32 get_group_lib_count(i32 gid) {
+        Group g = self.groups[gid].clone();
+        return g.lib_count;
     }
     
-    // 检查 Group 是否存活
-    public bool is_group_alive(i32 gid) {
-        return self.g_state[gid] > 0;
+    // 检查 Group 是否存活（readonly：只读查询）
+    public readonly bool is_group_alive(i32 gid) {
+        Group g = self.groups[gid].clone();
+        return g.state > 0;
+    }
+    
+    // 获取 Group 大小（棋子数）（readonly：只读查询）
+    public readonly i32 get_group_size(i32 gid) {
+        Group g = self.groups[gid].clone();
+        return g.size;
     }
     
     // 清空
     public void clear_all() {
         self.group_count = 0;
+        // 清空动态数组：逐个 pop（动态数组的"动"字诀）
+        while (self.groups.len() > 0) {
+            self.groups.pop();
+        }
         for (i32 i = 0; i < 169; i++) {
             self.belong[i] = -1;
-            self.g_id[i] = -1;
-            self.g_color[i] = 0;
-            self.g_size[i] = 0;
-            self.g_lib_count[i] = 0;
-            self.g_state[i] = 0;
-            self.g_stone_count[i] = 0;
-            self.g_lib_top[i] = 0;
         }
     }
     
-    // 获取 Group 数量
-    public i32 count() {
+    // 获取 Group 数量（readonly：只读查询）
+    public readonly i32 count() {
         return self.group_count;
     }
 }
 
-// ==================== 主函数 ====================
-
-public void main() {
-    // 空实现
-}
+// ==================== 结束 ====================

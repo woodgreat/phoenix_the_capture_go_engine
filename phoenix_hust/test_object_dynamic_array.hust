@@ -1,0 +1,74 @@
+// test_object_dynamic_array.hust - 测试对象类型动态数组支持
+// 2026-10-17
+
+// ==================== 测试用例 ====================
+
+// 测试 1：String 动态数组
+void test_string_dynamic_array() {
+    println!("Test 1: String[] dynamic array");
+    
+    // 尝试声明 String 动态数组
+    String[] names = {};  // 空数组初始化
+    names.push("Alice");
+    names.push("Bob");
+    
+    println!("  String[] length: {}", names.len());
+    println!("  String[0]: {}", names[0]);
+}
+
+// 测试 2：自定义类动态数组
+class Item {
+    i32 id;
+    String name;
+    
+    public Item(i32 id, String name) {
+        self.id = id;
+        self.name = name;
+    }
+}
+
+void test_class_dynamic_array() {
+    println!("Test 2: Item[] dynamic array");
+    
+    // 尝试声明 Item 动态数组
+    Item[] items = {};  // 空数组初始化
+    items.push(new Item(1, "Apple"));
+    items.push(new Item(2, "Banana"));
+    
+    println!("  Item[] length: {}", items.len());
+    println!("  Item[0].id: {}", items[0].id);
+}
+
+// 测试 3：基本类型动态数组（对照组）
+void test_primitive_dynamic_array() {
+    println!("Test 3: i32[] dynamic array (control)");
+    
+    // 基本类型动态数组（应该成功）
+    i32[] numbers;
+    numbers.push(10);
+    numbers.push(20);
+    
+    println!("  i32[] length: {}", numbers.len());
+    println!("  i32[0]: {}", numbers[0]);
+}
+
+// ==================== 主函数 ====================
+
+public void main() {
+    println!("=== Object Dynamic Array Support Test ===");
+    println!("");
+    
+    // 先测试基本类型（对照组）
+    test_primitive_dynamic_array();
+    println!("");
+    
+    // 测试 String 动态数组
+    test_string_dynamic_array();
+    println!("");
+    
+    // 测试自定义类动态数组
+    test_class_dynamic_array();
+    println!("");
+    
+    println!("=== All tests completed ===");
+}
