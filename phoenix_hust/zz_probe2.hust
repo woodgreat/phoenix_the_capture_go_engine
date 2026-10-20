@@ -1,0 +1,14 @@
+// 探针2：验证 Board 能否作为返回值、能否被修改后回传
+use board;
+
+public Board modify(Board b, i32 color) {
+    Board b2 = b;
+    b2.place_stone(6, 6, color);
+    return b2;
+}
+
+void main() {
+    Board b = new Board();
+    Board r = modify(b, 1);
+    println!("get(6,6)={}", r.get(6, 6));
+}

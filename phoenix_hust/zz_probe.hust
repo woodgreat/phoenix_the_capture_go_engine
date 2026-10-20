@@ -1,0 +1,11 @@
+// 探针：验证 Board 能否作为函数参数传入
+use board;
+
+public i32 probe(Board b, i32 color) {
+    return b.get(0, 0) + color;
+}
+
+void main() {
+    Board b = new Board();
+    println!("probe={}", probe(b, 1));
+}
