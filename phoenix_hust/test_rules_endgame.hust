@@ -1,0 +1,42 @@
+// test_rules_endgame.hust - 终局规则回归测试（Phase 2.5）
+// 规则：黑吃 >= 6 黑胜 / 白吃 >= 5 白胜 / 循环劫局白胜
+//       其余一律继续落子，禁止 pass
+
+use rules;
+
+void expect_over(i32 bc, i32 wc, i32 empties, i32 want, String label) {
+    i32 got = check_game_over(bc, wc, empties);
+    if (got == want) {
+        println!("  [PASS] {} -> {}", label, got);
+    } else {
+        println!("  [FAIL] {} -> 期望 {}，实际 {}", label, want, got);
+    }
+}
+
+void main() {
+    println!("=== 终局规则测试 ===");
+
+    println!("Test 1: 黑吃子定额");
+    expect_over(5, 0, 100, 0, "黑 5 子未达标");
+    expect_over(6, 0, 100, 1, "黑 6 子达标");
+    expect_over(7, 0, 100, 1, "黑 7 子超定额");
+
+    println!("Test 2: 白吃子定额");
+    expect_over(0, 4, 100, 0, "白 4 子未达标");
+    expect_over(0, 5, 100, 2, "白 5 子达标");
+    expect_over(0, 6, 100, 2, "白 6 子超定额");
+
+    println!("Test 3: 双方都达标时黑优先判定");
+    expect_over(6, 5, 100, 1, "同时达标黑先判");
+
+    println!("Test 4: 未达标继续对局");
+    expect_over(3, 3, 100, 0, "势均力敌继续");
+    expect_over(5, 4, 10, 0, "各差一子继续");
+
+    println!("Test 5: 棋盘填满的兜底分支（理论不可达）");
+    expect_over(3, 2, 0, 1, "填满且黑多 -> 黑");
+    expect_over(2, 3, 0, 2, "填满且白多 -> 白");
+    expect_over(2, 2, 0, 2, "填满且相等 -> 白");
+
+    println!("=== 测试完成 ===");
+}

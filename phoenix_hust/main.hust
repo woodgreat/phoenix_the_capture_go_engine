@@ -21,6 +21,7 @@ use board;
 use gtp;
 use ai;
 use ai_env_datatypes;
+use ai_env_jie_loop;
 
 void main() {
     // CLI parsing: GNU Go style switches
@@ -59,6 +60,8 @@ void main() {
     }
 
     Board b = new Board();
+    // Ko-loop detector: the only stalemate (3+ kos, each recaptured 3+ times)
+    JieLoopDetector jie_loop = new JieLoopDetector();
     // setup_twist_cross() is now called inside the ctor (A2 fix)
     if (!gtp_mode) {
         println!("wood_capture_go_engine_phoenix");
@@ -319,6 +322,12 @@ void main() {
                         move_history.push(y);
                         move_history.push(r);
                         move_count = move_count + 1;
+                        // ko-loop tracking: exactly one stone captured = ko point
+                        if (r == 1) {
+                            jie_loop.on_move(x * 13 + y, true);
+                        } else {
+                            jie_loop.on_move(x * 13 + y, false);
+                        }
                         println!("={}", p);
                         board_changed = true;
                     } else {
@@ -391,6 +400,9 @@ void main() {
                 println!("={}1 B", p);
             } else if (b.white_captures >= 5) {
                 println!("={}1 W", p);
+            } else if (jie_loop.is_detected()) {
+                // cyclic ko (3+ kos each recaptured 3+ times): white wins
+                println!("={}1 W", p);
             } else if (empties == 0) {
                 if (b.black_captures > b.white_captures) {
                     println!("={}2 B", p);
@@ -409,6 +421,9 @@ void main() {
             if (b.black_captures >= 6) {
                 println!("={}black", p);
             } else if (b.white_captures >= 5) {
+                println!("={}white", p);
+            } else if (jie_loop.is_detected()) {
+                // cyclic ko: white wins
                 println!("={}white", p);
             } else if (b.move_count >= 169) {
                 // Board full, compare captures
@@ -526,6 +541,18 @@ void main() {
                         move_history.push(b.black_captures - hist_meta[hist_meta.len() - 5]);
                     }
                     move_count = move_count + 1;
+                    // ko-loop tracking for the AI move as well
+                    i32 ai_cap = 0;
+                    if (color == 1) {
+                        ai_cap = b.white_captures - hist_meta[hist_meta.len() - 4];
+                    } else {
+                        ai_cap = b.black_captures - hist_meta[hist_meta.len() - 5];
+                    }
+                    if (ai_cap == 1) {
+                        jie_loop.on_move(lx * 13 + ly, true);
+                    } else {
+                        jie_loop.on_move(lx * 13 + ly, false);
+                    }
                     String coord = xy_to_gtp(lx, ly);
                     println!("={}{}", p, coord.clone());
                     board_changed = true;

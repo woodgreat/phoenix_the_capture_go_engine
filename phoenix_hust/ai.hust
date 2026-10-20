@@ -22,7 +22,7 @@ public class Level1 implements MoveGenerator {
         this.last_y = -1;
     }
 
-    // The move made by the last genmove call (-1 = pass / nothing)
+    // The move made by the last genmove call (-1 = no legal point; never a pass)
     public i32 last_x() {
         return this.last_x;
     }
@@ -93,7 +93,8 @@ public class Level1 implements MoveGenerator {
             mv = empty_moves[b2.rand_below(n_empty)];
         }
         if (mv < 0) {
-            // no legal point: pass
+            // no legal point at all (not a pass): Wood rules forbid passing,
+            // this state is theoretically unreachable on a 13x13 board
             this.last_x = -1;
             this.last_y = -1;
             return b2;
@@ -386,9 +387,10 @@ public class Level5 implements MoveGenerator {
     }
 }
 
-// Level 7: iterative deepening (depth 2..5) + node budget + endgame
-// pass policy (few empty points and no capture candidate -> pass, so
-// games can reach a decision within ~200 moves).
+// Level 7: iterative deepening (depth 2..5) + node budget.
+// Wood Capture Go forbids passing: the engine always returns a real move.
+// Level7 returns -1 only when there is genuinely no legal point
+// (theoretically unreachable on a 13x13 board).
 public class Level7 implements MoveGenerator {
     i32 last_x;
     i32 last_y;
