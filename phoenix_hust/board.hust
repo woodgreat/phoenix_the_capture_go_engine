@@ -66,17 +66,17 @@ public class Board {
     // setup_twist_cross() is called directly instead of requiring the
     // caller to invoke it after `new Board()`.
     public Board() {
-        self.black_captures = 0;
-        self.white_captures = 0;
-        self.move_count = 0;
-        self.ko_x = -1;
-        self.ko_y = -1;
-        self.rng_seed = 88675123;
-        self.search_nodes = 0;
-        self.search_budget = 300000;
-        self.setup_twist_cross();
+        this.black_captures = 0;
+        this.white_captures = 0;
+        this.move_count = 0;
+        this.ko_x = -1;
+        this.ko_y = -1;
+        this.rng_seed = 88675123;
+        this.search_nodes = 0;
+        this.search_budget = 300000;
+        this.setup_twist_cross();
         // Initialize TT arrays (2026-10-10)
-        self.init_search_tables();
+        this.init_search_tables();
     }
 
     // Initialize transposition table and Zobrist hashing tables.
@@ -93,41 +93,41 @@ public class Board {
             if (v < 0) {
                 v = -v;
             }
-            self.zobrist_table.push(v);
+            this.zobrist_table.push(v);
         }
         // TT arrays: 256 entries each
         for (i32 i = 0; i < 256; i++) {
-            self.tt_hash.push(0);
-            self.tt_score.push(0);
-            self.tt_depth.push(0);
-            self.tt_alpha.push(-INF);
-            self.tt_beta.push(INF);
+            this.tt_hash.push(0);
+            this.tt_score.push(0);
+            this.tt_depth.push(0);
+            this.tt_alpha.push(-INF);
+            this.tt_beta.push(INF);
         }
     }
 
     // Reset board to the mandatory twist-cross opening position
     public void clear() {
-        self.black_captures = 0;
-        self.white_captures = 0;
-        self.move_count = 0;
-        self.ko_x = -1;
-        self.ko_y = -1;
+        this.black_captures = 0;
+        this.white_captures = 0;
+        this.move_count = 0;
+        this.ko_x = -1;
+        this.ko_y = -1;
         for (i32 i = 0; i < BOARD_SIZE; i++) {
             for (i32 j = 0; j < BOARD_SIZE; j++) {
-                self.grid[i][j] = 0;
+                this.grid[i][j] = 0;
             }
         }
-        self.setup_twist_cross();
+        this.setup_twist_cross();
     }
 
     // Mandatory twist-cross opening (mutual cut, 2x2 block at center):
     //   Black: G7 (6,6) and H8 (7,7)   - main diagonal
     //   White: G8 (6,7) and H7 (7,6)   - anti diagonal
     public void setup_twist_cross() {
-        self.grid[6][6] = 1;
-        self.grid[6][7] = 2;
-        self.grid[7][6] = 2;
-        self.grid[7][7] = 1;
+        this.grid[6][6] = 1;
+        this.grid[6][7] = 2;
+        this.grid[7][6] = 2;
+        this.grid[7][7] = 1;
     }
 
     // Coordinate in range check
@@ -137,24 +137,24 @@ public class Board {
 
     // Empty point check (out of range counts as not empty)
     public bool is_empty(i32 x, i32 y) {
-        if (!self.is_valid(x, y)) {
+        if (!this.is_valid(x, y)) {
             return false;
         }
-        return self.grid[x][y] == 0;
+        return this.grid[x][y] == 0;
     }
 
     // Get stone color at (x, y); -1 if out of range
     public i32 get(i32 x, i32 y) {
-        if (!self.is_valid(x, y)) {
+        if (!this.is_valid(x, y)) {
             return -1;
         }
-        return self.grid[x][y];
+        return this.grid[x][y];
     }
 
     // Set color directly (for rules/AI internals, no counter updates)
     public void set(i32 x, i32 y, i32 val) {
-        if (self.is_valid(x, y)) {
-            self.grid[x][y] = val;
+        if (this.is_valid(x, y)) {
+            this.grid[x][y] = val;
         }
     }
 
@@ -162,14 +162,14 @@ public class Board {
     // Capture detection, suicide and ko rules are added in Step 4-5.
     // Returns true on success.
     public bool place_raw(i32 x, i32 y, i32 color) {
-        if (!self.is_valid(x, y)) {
+        if (!this.is_valid(x, y)) {
             return false;
         }
-        if (!self.is_empty(x, y)) {
+        if (!this.is_empty(x, y)) {
             return false;
         }
-        self.grid[x][y] = color;
-        self.move_count = self.move_count + 1;
+        this.grid[x][y] = color;
+        this.move_count = this.move_count + 1;
         return true;
     }
 
@@ -178,7 +178,7 @@ public class Board {
     // Returns 0 for empty points.
     // (2026-10-10) B7 fix: use Vec<i32> instead of static arrays
     public i32 count_liberties(i32 x, i32 y) {
-        i32 color = self.get(x, y);
+        i32 color = this.get(x, y);
         if (color <= 0) {
             return 0;
         }
@@ -198,13 +198,13 @@ public class Board {
             for (i32 d = 0; d < 4; d++) {
                 i32 nx = cx + dxs[d];
                 i32 ny = cy + dys[d];
-                if (self.is_valid(nx, ny)) {
-                    if (self.grid[nx][ny] == 0) {
+                if (this.is_valid(nx, ny)) {
+                    if (this.grid[nx][ny] == 0) {
                         if (seen_lib[nx][ny] == 0) {
                             seen_lib[nx][ny] = 1;
                             liblist.push(nx * BOARD_SIZE + ny);
                         }
-                    } else if (self.grid[nx][ny] == color) {
+                    } else if (this.grid[nx][ny] == color) {
                         if (seen_stone[nx][ny] == 0) {
                             seen_stone[nx][ny] = 1;
                             stack.push(nx * BOARD_SIZE + ny);
@@ -220,13 +220,13 @@ public class Board {
     // Caller must verify the group has no liberties (capture) first.
     // (2026-10-10) B7 fix: use Vec<i32> with head pointer (simplest form)
     public i32 remove_group(i32 x, i32 y) {
-        i32 color = self.grid[x][y];
+        i32 color = this.grid[x][y];
         if (color == 0) {
             return 0;
         }
         i32[] qx;
         i32[] qy;
-        self.grid[x][y] = 0;
+        this.grid[x][y] = 0;
         qx.push(x);
         qy.push(y);
         i32 head = 0;
@@ -240,8 +240,8 @@ public class Board {
             for (i32 d = 0; d < 4; d++) {
                 i32 nx = cx + dxs[d];
                 i32 ny = cy + dys[d];
-                if (self.is_valid(nx, ny) && self.grid[nx][ny] == color) {
-                    self.grid[nx][ny] = 0;
+                if (this.is_valid(nx, ny) && this.grid[nx][ny] == color) {
+                    this.grid[nx][ny] = 0;
                     qx.push(nx);
                     qy.push(ny);
                     count = count + 1;
@@ -259,10 +259,10 @@ public class Board {
     // State is saved before the tentative placement and restored on
     // rejection, so failed moves leave the board untouched.
     public i32 place_stone(i32 x, i32 y, i32 color) {
-        if (!self.is_valid(x, y)) {
+        if (!this.is_valid(x, y)) {
             return -1;
         }
-        if (!self.is_empty(x, y)) {
+        if (!this.is_empty(x, y)) {
             return -1;
         }
 
@@ -271,28 +271,28 @@ public class Board {
         i32[BOARD_SIZE][BOARD_SIZE] saved = {0};
         for (i32 i = 0; i < BOARD_SIZE; i++) {
             for (i32 j = 0; j < BOARD_SIZE; j++) {
-                saved[i][j] = self.grid[i][j];
+                saved[i][j] = this.grid[i][j];
             }
         }
-        i32 save_bc = self.black_captures;
-        i32 save_wc = self.white_captures;
-        i32 save_kx = self.ko_x;
-        i32 save_ky = self.ko_y;
+        i32 save_bc = this.black_captures;
+        i32 save_wc = this.white_captures;
+        i32 save_kx = this.ko_x;
+        i32 save_ky = this.ko_y;
 
-        self.grid[x][y] = color;
+        this.grid[x][y] = color;
         i32 captured = 0;
         i32 cap_x = -1;
         i32 cap_y = -1;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-        i32 opp = self.opponent(color);
+        i32 opp = this.opponent(color);
         for (i32 d = 0; d < 4; d++) {
             i32 nx = x + dxs[d];
             i32 ny = y + dys[d];
-            if (self.is_valid(nx, ny)) {
-                if (self.grid[nx][ny] == opp) {
-                    if (self.count_liberties(nx, ny) == 0) {
-                        i32 removed = self.remove_group(nx, ny);
+            if (this.is_valid(nx, ny)) {
+                if (this.grid[nx][ny] == opp) {
+                    if (this.count_liberties(nx, ny) == 0) {
+                        i32 removed = this.remove_group(nx, ny);
                         captured = captured + removed;
                         if (removed == 1) {
                             cap_x = nx;
@@ -305,57 +305,57 @@ public class Board {
 
         // Suicide: own group has no liberties and nothing was captured
         if (captured == 0) {
-            if (self.count_liberties(x, y) == 0) {
+            if (this.count_liberties(x, y) == 0) {
                 for (i32 i = 0; i < BOARD_SIZE; i++) {
                     for (i32 j = 0; j < BOARD_SIZE; j++) {
-                        self.grid[i][j] = saved[i][j];
+                        this.grid[i][j] = saved[i][j];
                     }
                 }
-                self.black_captures = save_bc;
-                self.white_captures = save_wc;
-                self.ko_x = save_kx;
-                self.ko_y = save_ky;
+                this.black_captures = save_bc;
+                this.white_captures = save_wc;
+                this.ko_x = save_kx;
+                this.ko_y = save_ky;
                 return -2;
             }
         }
 
         // Ko: single-stone recapture exactly at the previous ko point
         if (captured == 1) {
-            if (x == self.ko_x && y == self.ko_y) {
+            if (x == this.ko_x && y == this.ko_y) {
                 for (i32 i = 0; i < BOARD_SIZE; i++) {
                     for (i32 j = 0; j < BOARD_SIZE; j++) {
-                        self.grid[i][j] = saved[i][j];
+                        this.grid[i][j] = saved[i][j];
                     }
                 }
-                self.black_captures = save_bc;
-                self.white_captures = save_wc;
-                self.ko_x = save_kx;
-                self.ko_y = save_ky;
+                this.black_captures = save_bc;
+                this.white_captures = save_wc;
+                this.ko_x = save_kx;
+                this.ko_y = save_ky;
                 return -3;
             }
-            self.ko_x = cap_x;
-            self.ko_y = cap_y;
+            this.ko_x = cap_x;
+            this.ko_y = cap_y;
         } else {
-            self.ko_x = -1;
-            self.ko_y = -1;
+            this.ko_x = -1;
+            this.ko_y = -1;
         }
 
         if (color == 1) {
-            self.black_captures = self.black_captures + captured;
+            this.black_captures = this.black_captures + captured;
         } else {
-            self.white_captures = self.white_captures + captured;
+            this.white_captures = this.white_captures + captured;
         }
-        self.move_count = self.move_count + 1;
+        this.move_count = this.move_count + 1;
         return captured;
     }
 
     // Captured-stone count for a side (1 = black, 2 = white)
     public i32 get_captures(i32 color) {
         if (color == 1) {
-            return self.black_captures;
+            return this.black_captures;
         }
         if (color == 2) {
-            return self.white_captures;
+            return this.white_captures;
         }
         return 0;
     }
@@ -380,9 +380,9 @@ public class Board {
             }
             print!("{} ", row_num);
             for (i32 x = 0; x < BOARD_SIZE; x++) {
-                if (self.grid[x][y] == 0) {
+                if (this.grid[x][y] == 0) {
                     print!(". ");
-                } else if (self.grid[x][y] == 1) {
+                } else if (this.grid[x][y] == 1) {
                     print!("B ");
                 } else {
                     print!("W ");
@@ -397,33 +397,33 @@ public class Board {
     // Overwrite a capture counter (1 = black, 2 = white)
     public void set_captures(i32 color, i32 n) {
         if (color == 1) {
-            self.black_captures = n;
+            this.black_captures = n;
         } else {
-            self.white_captures = n;
+            this.white_captures = n;
         }
     }
 
     // Restore the ko point
     public void set_ko(i32 kx, i32 ky) {
-        self.ko_x = kx;
-        self.ko_y = ky;
+        this.ko_x = kx;
+        this.ko_y = ky;
     }
 
     // Restore the move counter
     public void set_move_count(i32 n) {
-        self.move_count = n;
+        this.move_count = n;
     }
 
     // Reset the search node counter and set the budget (called by the
     // AI layer before starting a new search)
     public void start_search(i32 budget) {
-        self.search_nodes = 0;
-        self.search_budget = budget;
+        this.search_nodes = 0;
+        this.search_budget = budget;
     }
 
     // Ko-point query for the AI layer (ko_x/ko_y stay private)
     public bool is_ko_point(i32 x, i32 y) {
-        return x == self.ko_x && y == self.ko_y;
+        return x == this.ko_x && y == this.ko_y;
     }
 
     // Pseudo-random number in [0, n-1] via LCG. i64 intermediate keeps
@@ -432,11 +432,11 @@ public class Board {
         if (n <= 0) {
             return 0;
         }
-        i64 s = (i64)self.rng_seed * 1103515245 + 12345;
+        i64 s = (i64)this.rng_seed * 1103515245 + 12345;
         i64 t = s >> 16;
         i64 t2 = t & 32767;
-        self.rng_seed = (i32)t2;
-        i32 v = self.rng_seed;
+        this.rng_seed = (i32)t2;
+        i32 v = this.rng_seed;
         if (v < 0) {
             v = -v;
         }
@@ -457,11 +457,11 @@ public class Board {
         i32 h = 0;
         for (i32 x = 0; x < BOARD_SIZE; x++) {
             for (i32 y = 0; y < BOARD_SIZE; y++) {
-                i32 c = self.grid[x][y];
+                i32 c = this.grid[x][y];
                 if (c == 1) {
-                    h = h ^ self.zobrist_table[(x * BOARD_SIZE + y) as usize];
+                    h = h ^ this.zobrist_table[(x * BOARD_SIZE + y) as usize];
                 } else if (c == 2) {
-                    h = h ^ self.zobrist_table[(BOARD_CELLS + x * BOARD_SIZE + y) as usize];
+                    h = h ^ this.zobrist_table[(BOARD_CELLS + x * BOARD_SIZE + y) as usize];
                 }
             }
         }
@@ -480,21 +480,21 @@ public class Board {
         i32 sp = 0;
         while (sp < 4) {
             i32 cur = (store_idx + sp) % 256;
-            if (self.tt_hash[cur as usize] == hash) {
+            if (this.tt_hash[cur as usize] == hash) {
                 store_slot = cur;
                 break;
             }
-            if (self.tt_depth[cur as usize] < depth) {
+            if (this.tt_depth[cur as usize] < depth) {
                 store_slot = cur;
                 break;
             }
             sp = sp + 1;
         }
-        self.tt_hash[store_slot as usize] = hash;
-        self.tt_score[store_slot as usize] = score;
-        self.tt_depth[store_slot as usize] = depth;
-        self.tt_alpha[store_slot as usize] = alpha_in;
-        self.tt_beta[store_slot as usize] = beta_in;
+        this.tt_hash[store_slot as usize] = hash;
+        this.tt_score[store_slot as usize] = score;
+        this.tt_depth[store_slot as usize] = depth;
+        this.tt_alpha[store_slot as usize] = alpha_in;
+        this.tt_beta[store_slot as usize] = beta_in;
     }
 
     // Static evaluation from ai_color's perspective:
@@ -502,14 +502,14 @@ public class Board {
     // Stones removed during search are absent from the grid, so the
     // stone diff already reflects captures made inside the search.
     public i32 evaluate_for(i32 ai_color) {
-        i32 opp = self.opponent(ai_color);
+        i32 opp = this.opponent(ai_color);
         i32 my_stones = 0;
         i32 opp_stones = 0;
         i32 my_libs = 0;
         i32 opp_libs = 0;
         for (i32 x = 0; x < BOARD_SIZE; x++) {
             for (i32 y = 0; y < BOARD_SIZE; y++) {
-                i32 c = self.grid[x][y];
+                i32 c = this.grid[x][y];
                 if (c == ai_color) {
                     my_stones = my_stones + 1;
                 } else if (c == opp) {
@@ -522,11 +522,11 @@ public class Board {
                     for (i32 d = 0; d < 4; d++) {
                         i32 nx = x + dxs[d];
                         i32 ny = y + dys[d];
-                        if (self.is_valid(nx, ny)) {
-                            if (self.grid[nx][ny] == ai_color) {
+                        if (this.is_valid(nx, ny)) {
+                            if (this.grid[nx][ny] == ai_color) {
                                 has_my = 1;
                             }
-                            if (self.grid[nx][ny] == opp) {
+                            if (this.grid[nx][ny] == opp) {
                                 has_opp = 1;
                             }
                         }
@@ -538,13 +538,13 @@ public class Board {
         }
         i32 cap_diff = 0;
         if (ai_color == 1) {
-            cap_diff = self.black_captures - self.white_captures;
+            cap_diff = this.black_captures - this.white_captures;
         } else {
-            cap_diff = self.white_captures - self.black_captures;
+            cap_diff = this.white_captures - this.black_captures;
         }
         // capture is the victory currency: stone diff dominates
-        i32 eye = self.count_eye_potential(ai_color) - self.count_eye_potential(opp);
-        i32 conn = self.count_connection_strength(ai_color) - self.count_connection_strength(opp);
+        i32 eye = this.count_eye_potential(ai_color) - this.count_eye_potential(opp);
+        i32 conn = this.count_connection_strength(ai_color) - this.count_connection_strength(opp);
         return (my_stones - opp_stones) * 100 + (my_libs - opp_libs) * 8
              + cap_diff * 100 + eye * 50 + conn * 30;
     }
@@ -558,12 +558,12 @@ public class Board {
         i32[4] dys = {1, -1, 0, 0};
         for (i32 x = 0; x < BOARD_SIZE; x++) {
             for (i32 y = 0; y < BOARD_SIZE; y++) {
-                if (self.grid[x][y] == 0) {
+                if (this.grid[x][y] == 0) {
                     i32 adj = 0;
                     for (i32 d = 0; d < 4; d++) {
                         i32 nx = x + dxs[d];
                         i32 ny = y + dys[d];
-                        if (self.is_valid(nx, ny) && self.grid[nx][ny] == color) {
+                        if (this.is_valid(nx, ny) && this.grid[nx][ny] == color) {
                             adj = adj + 1;
                         }
                     }
@@ -585,11 +585,11 @@ public class Board {
         i32[4] dys = {1, -1, 0, 0};
         for (i32 x = 0; x < BOARD_SIZE; x++) {
             for (i32 y = 0; y < BOARD_SIZE; y++) {
-                if (self.grid[x][y] == color) {
+                if (this.grid[x][y] == color) {
                     for (i32 d = 0; d < 4; d++) {
                         i32 nx = x + dxs[d];
                         i32 ny = y + dys[d];
-                        if (self.is_valid(nx, ny) && self.grid[nx][ny] == color) {
+                        if (this.is_valid(nx, ny) && this.grid[nx][ny] == color) {
                             score = score + 1;
                         }
                     }
@@ -614,13 +614,13 @@ public class Board {
     public i32 minimax(i32 depth, i32 color_to_move, i32 ai_color, i32 alpha_in, i32 beta_in) {
         i32 alpha = alpha_in;
         i32 beta = beta_in;
-        self.search_nodes = self.search_nodes + 1;
-        if (depth == 0 || self.search_nodes > self.search_budget) {
-            return self.evaluate_for(ai_color);
+        this.search_nodes = this.search_nodes + 1;
+        if (depth == 0 || this.search_nodes > this.search_budget) {
+            return this.evaluate_for(ai_color);
         }
 
         // TT probe: linear probe 4 slots
-        i32 hash = self.zobrist_hash();
+        i32 hash = this.zobrist_hash();
         i32 idx = 0;
         if (hash < 0) {
             idx = (0 - hash) % 256;
@@ -630,11 +630,11 @@ public class Board {
         i32 probe = 0;
         while (probe < 4) {
             i32 slot = (idx + probe) % 256;
-            if (self.tt_hash[slot as usize] == hash && self.tt_depth[slot as usize] >= depth) {
-                i32 tt_val = self.tt_score[slot as usize];
-                if (self.tt_alpha[slot as usize] == self.tt_beta[slot as usize]) {
+            if (this.tt_hash[slot as usize] == hash && this.tt_depth[slot as usize] >= depth) {
+                i32 tt_val = this.tt_score[slot as usize];
+                if (this.tt_alpha[slot as usize] == this.tt_beta[slot as usize]) {
                     return tt_val;                       // exact
-                } else if (self.tt_score[slot as usize] <= self.tt_alpha[slot as usize]) {
+                } else if (this.tt_score[slot as usize] <= this.tt_alpha[slot as usize]) {
                     if (tt_val <= alpha) {
                         return tt_val;                   // upper bound cutoff
                     }
@@ -652,7 +652,7 @@ public class Board {
         i32[BOARD_SIZE][BOARD_SIZE] snap = {0};
         for (i32 i = 0; i < BOARD_SIZE; i++) {
             for (i32 j = 0; j < BOARD_SIZE; j++) {
-                snap[i][j] = self.grid[i][j];
+                snap[i][j] = this.grid[i][j];
             }
         }
         bool maximizing = color_to_move == ai_color;
@@ -661,29 +661,29 @@ public class Board {
             best = -INF;
         }
         bool any_move = false;
-        i32 opp = self.opponent(color_to_move);
+        i32 opp = this.opponent(color_to_move);
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
         for (i32 x = 0; x < BOARD_SIZE; x++) {
             for (i32 y = 0; y < BOARD_SIZE; y++) {
-                if (self.grid[x][y] == 0) {
-                    self.grid[x][y] = color_to_move;
+                if (this.grid[x][y] == 0) {
+                    this.grid[x][y] = color_to_move;
                     for (i32 d = 0; d < 4; d++) {
                         i32 nx = x + dxs[d];
                         i32 ny = y + dys[d];
-                        if (self.is_valid(nx, ny)) {
-                            if (self.grid[nx][ny] == opp) {
-                                if (self.count_liberties(nx, ny) == 0) {
-                                    self.remove_group(nx, ny);
+                        if (this.is_valid(nx, ny)) {
+                            if (this.grid[nx][ny] == opp) {
+                                if (this.count_liberties(nx, ny) == 0) {
+                                    this.remove_group(nx, ny);
                                 }
                             }
                         }
                     }
                     any_move = true;
-                    i32 val = self.minimax(depth - 1, opp, ai_color, alpha, beta);
+                    i32 val = this.minimax(depth - 1, opp, ai_color, alpha, beta);
                     for (i32 i = 0; i < BOARD_SIZE; i++) {
                         for (i32 j = 0; j < BOARD_SIZE; j++) {
-                            self.grid[i][j] = snap[i][j];
+                            this.grid[i][j] = snap[i][j];
                         }
                     }
                     if (maximizing) {
@@ -702,16 +702,16 @@ public class Board {
                         }
                     }
                     if (beta <= alpha) {
-                        self.tt_write(hash, depth, best, alpha_in, beta_in);
+                        this.tt_write(hash, depth, best, alpha_in, beta_in);
                         return best;
                     }
                 }
             }
         }
         if (!any_move) {
-            best = self.evaluate_for(ai_color);
+            best = this.evaluate_for(ai_color);
         }
-        self.tt_write(hash, depth, best, alpha_in, beta_in);
+        this.tt_write(hash, depth, best, alpha_in, beta_in);
         return best;
     }
 }

@@ -4,18 +4,18 @@ public class TestArr {
     i32[] data;
     
     public TestArr() {
-        self.data.push(10);
-        self.data.push(20);
-        self.data.push(30);
+        this.data.push(10);
+        this.data.push(20);
+        this.data.push(30);
     }
     
     public void modify_element(i32 idx, i32 val) {
         // 测试：修改指定位置的元素
-        self.data[idx] = val;
+        this.data[idx] = val;
     }
     
     public i32 get_element(i32 idx) {
-        return self.data[idx];
+        return this.data[idx];
     }
 }
 

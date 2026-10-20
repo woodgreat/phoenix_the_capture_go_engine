@@ -10,7 +10,7 @@
 use board;
 
 interface MoveGenerator {
-    public genmove(board, color);
+    public newBoard genmove(board, color);
 }
 
 public class Level1 implements MoveGenerator {
@@ -18,17 +18,17 @@ public class Level1 implements MoveGenerator {
     i32 last_y;
 
     public Level1() {
-        self.last_x = -1;
-        self.last_y = -1;
+        this.last_x = -1;
+        this.last_y = -1;
     }
 
     // The move made by the last genmove call (-1 = pass / nothing)
     public i32 last_x() {
-        return self.last_x;
+        return this.last_x;
     }
 
     public i32 last_y() {
-        return self.last_y;
+        return this.last_y;
     }
 
     public Board genmove(Board board, i32 color) {
@@ -94,20 +94,20 @@ public class Level1 implements MoveGenerator {
         }
         if (mv < 0) {
             // no legal point: pass
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
             return b2;
         }
         i32 mx = mv / 13;
         i32 my = mv - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
-            self.last_x = mx;
-            self.last_y = my;
+            this.last_x = mx;
+            this.last_y = my;
         } else {
             // defensive: candidates are pre-checked, should not happen
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
         }
         return b2;
     }
@@ -115,58 +115,58 @@ public class Level1 implements MoveGenerator {
 
 // AIWrapper: unified AI interface (Hust V0.2.1 fix)
 // Replaces interface-typed returns (MoveGenerator) which are not supported.
-// Creates new AI instance per call (simple, avoids mut self issues).
+// Creates new AI instance per call (simple, avoids mut this issues).
 public class AIWrapper {
     i32 level;
     i32 last_x;
     i32 last_y;
     
     public AIWrapper(i32 lvl) {
-        self.level = lvl;
-        self.last_x = -1;
-        self.last_y = -1;
+        this.level = lvl;
+        this.last_x = -1;
+        this.last_y = -1;
     }
     
     public Board genmove(Board board, i32 color) {
-        if (self.level <= 1) {
+        if (this.level <= 1) {
             Level1 ai = new Level1();
             Board result = ai.genmove(board, color);
-            self.last_x = ai.last_x();
-            self.last_y = ai.last_y();
+            this.last_x = ai.last_x();
+            this.last_y = ai.last_y();
             return result;
-        } else if (self.level <= 3) {
+        } else if (this.level <= 3) {
             Level3 ai = new Level3();
             Board result = ai.genmove(board, color);
-            self.last_x = ai.last_x();
-            self.last_y = ai.last_y();
+            this.last_x = ai.last_x();
+            this.last_y = ai.last_y();
             return result;
-        } else if (self.level <= 5) {
+        } else if (this.level <= 5) {
             Level5 ai = new Level5();
             Board result = ai.genmove(board, color);
-            self.last_x = ai.last_x();
-            self.last_y = ai.last_y();
+            this.last_x = ai.last_x();
+            this.last_y = ai.last_y();
             return result;
-        } else if (self.level <= 7) {
+        } else if (this.level <= 7) {
             Level7 ai = new Level7();
             Board result = ai.genmove(board, color);
-            self.last_x = ai.last_x();
-            self.last_y = ai.last_y();
+            this.last_x = ai.last_x();
+            this.last_y = ai.last_y();
             return result;
         } else {
             Level10 ai = new Level10();
             Board result = ai.genmove(board, color);
-            self.last_x = ai.last_x();
-            self.last_y = ai.last_y();
+            this.last_x = ai.last_x();
+            this.last_y = ai.last_y();
             return result;
         }
     }
     
     public i32 last_x() {
-        return self.last_x;
+        return this.last_x;
     }
     
     public i32 last_y() {
-        return self.last_y;
+        return this.last_y;
     }
 }
 
@@ -185,16 +185,16 @@ public class Level3 implements MoveGenerator {
     i32 last_y;
 
     public Level3() {
-        self.last_x = -1;
-        self.last_y = -1;
+        this.last_x = -1;
+        this.last_y = -1;
     }
 
     public i32 last_x() {
-        return self.last_x;
+        return this.last_x;
     }
 
     public i32 last_y() {
-        return self.last_y;
+        return this.last_y;
     }
 
     public Board genmove(Board board, i32 color) {
@@ -280,19 +280,19 @@ public class Level3 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
             return b2;
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
-            self.last_x = mx;
-            self.last_y = my;
+            this.last_x = mx;
+            this.last_y = my;
         } else {
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
         }
         return b2;
     }
@@ -307,16 +307,16 @@ public class Level5 implements MoveGenerator {
     i32 last_y;
 
     public Level5() {
-        self.last_x = -1;
-        self.last_y = -1;
+        this.last_x = -1;
+        this.last_y = -1;
     }
 
     public i32 last_x() {
-        return self.last_x;
+        return this.last_x;
     }
 
     public i32 last_y() {
-        return self.last_y;
+        return this.last_y;
     }
 
     public Board genmove(Board board, i32 color) {
@@ -368,19 +368,19 @@ public class Level5 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
             return b2;
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
-            self.last_x = mx;
-            self.last_y = my;
+            this.last_x = mx;
+            this.last_y = my;
         } else {
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
         }
         return b2;
     }
@@ -394,16 +394,16 @@ public class Level7 implements MoveGenerator {
     i32 last_y;
 
     public Level7() {
-        self.last_x = -1;
-        self.last_y = -1;
+        this.last_x = -1;
+        this.last_y = -1;
     }
 
     public i32 last_x() {
-        return self.last_x;
+        return this.last_x;
     }
 
     public i32 last_y() {
-        return self.last_y;
+        return this.last_y;
     }
 
     public Board genmove(Board board, i32 color) {
@@ -462,19 +462,19 @@ public class Level7 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
             return b2;
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
-            self.last_x = mx;
-            self.last_y = my;
+            this.last_x = mx;
+            this.last_y = my;
         } else {
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
         }
         return b2;
     }
@@ -487,16 +487,16 @@ public class Level10 implements MoveGenerator {
     i32 last_y;
 
     public Level10() {
-        self.last_x = -1;
-        self.last_y = -1;
+        this.last_x = -1;
+        this.last_y = -1;
     }
 
     public i32 last_x() {
-        return self.last_x;
+        return this.last_x;
     }
 
     public i32 last_y() {
-        return self.last_y;
+        return this.last_y;
     }
 
     public Board genmove(Board board, i32 color) {
@@ -554,19 +554,19 @@ public class Level10 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
             return b2;
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
-            self.last_x = mx;
-            self.last_y = my;
+            this.last_x = mx;
+            this.last_y = my;
         } else {
-            self.last_x = -1;
-            self.last_y = -1;
+            this.last_x = -1;
+            this.last_y = -1;
         }
         return b2;
     }
