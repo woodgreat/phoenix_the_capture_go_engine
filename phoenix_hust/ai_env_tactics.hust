@@ -1,0 +1,153 @@
+// ai_env_tactics.hust - 战术点识别（Phase 3）
+//
+// 只做静态分析，不做试探落子：
+//   提子点  - 与「只剩 1 气的对方棋块」相邻的空点
+//   叫吃点  - 与「只剩 2 气的对方棋块」相邻的空点
+//   紧气点  - 与对方棋块相邻的空点（含叫吃/提子，分数较低）
+//   自补点  - 与「只剩 1 气的己方棋块」相邻的空点（救棋）
+//
+// Hust 限制：数组参数按值复制，不可回写调用方，
+// 因此结果放在类成员数组 cands / scores 里，调用方用 at()/size() 读。
+
+use board;
+
+const i32 TAC_NONE = 0;
+const i32 TAC_LIBERTY = 10;      // 紧气
+const i32 TAC_ATARI = 40;        // 叫吃
+const i32 TAC_CAPTURE = 100;     // 提子
+const i32 TAC_RESCUE = 60;       // 自补救棋（己方只剩 1 气）
+
+public class Tactics {
+    i32[169] cands;      // 候选点编码 x*13+y
+    i32[169] scores;     // 对应战术分
+    i32 count;           // 候选点数量
+
+    public Tactics() {
+        this.count = 0;
+    }
+
+    // 落子后能否提子 / 叫吃 的静态判断分
+    public readonly i32 score_of(Board b, i32 x, i32 y, i32 color) {
+        if (!b.is_valid(x, y)) {
+            return TAC_NONE;
+        }
+        if (!b.is_empty(x, y)) {
+            return TAC_NONE;
+        }
+        i32 opp = b.opponent(color);
+        i32 best = TAC_NONE;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        for (i32 d = 0; d < 4; d++) {
+            i32 nx = x + dxs[d];
+            i32 ny = y + dys[d];
+            if (!b.is_valid(nx, ny)) {
+                continue;
+            }
+            i32 c = b.get(nx, ny);
+            if (c == 0) {
+                continue;
+            }
+            i32 libs = b.count_liberties(nx, ny);
+            if (c == opp) {
+                if (libs == 1) {
+                    // 对方棋块只剩这一口气：落子即提
+                    if (best < TAC_CAPTURE) {
+                        best = TAC_CAPTURE;
+                    }
+                } else if (libs == 2) {
+                    // 落子后对方剩 1 气：叫吃
+                    if (best < TAC_ATARI) {
+                        best = TAC_ATARI;
+                    }
+                } else {
+                    // 普通紧气
+                    if (best < TAC_LIBERTY) {
+                        best = TAC_LIBERTY;
+                    }
+                }
+            } else {
+                // 己方棋块：只剩 1 气时需要救
+                if (libs == 1) {
+                    if (best < TAC_RESCUE) {
+                        best = TAC_RESCUE;
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    // 扫描全盘，生成候选点（取前 topN 个，按分数降序）
+    // Board 参数是 move 语义：用完必须交回，否则调用方后续无法再用这个棋盘
+    public Board generate(Board b, i32 color, i32 top_n) {
+        this.clear();
+        i32[169] tmp_score = {0};
+        i32 n = 0;
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                i32 s = this.score_of(b, x, y, color);
+                if (s > 0) {
+                    this.cands[n] = x * 13 + y;
+                    tmp_score[n] = s;
+                    n = n + 1;
+                }
+            }
+        }
+        // 按分数降序做插入排序（n <= 169，足够快）
+        for (i32 i = 1; i < n; i++) {
+            i32 key_c = this.cands[i];
+            i32 key_s = tmp_score[i];
+            i32 j = i - 1;
+            while (j >= 0) {
+                if (tmp_score[j] < key_s) {
+                    this.cands[j + 1] = this.cands[j];
+                    tmp_score[j + 1] = tmp_score[j];
+                    j = j - 1;
+                } else {
+                    break;
+                }
+            }
+            this.cands[j + 1] = key_c;
+            tmp_score[j + 1] = key_s;
+        }
+        // 截取前 top_n 个
+        i32 keep = n;
+        if (top_n > 0 && keep > top_n) {
+            keep = top_n;
+        }
+        for (i32 k = 0; k < keep; k++) {
+            this.scores[k] = tmp_score[k];
+        }
+        this.count = keep;
+        return b;
+    }
+
+    public readonly i32 size() {
+        return this.count;
+    }
+
+    public readonly i32 at(i32 i) {
+        if (i < 0 || i >= this.count) {
+            return -1;
+        }
+        return this.cands[i];
+    }
+
+    public readonly i32 score_at(i32 i) {
+        if (i < 0 || i >= this.count) {
+            return 0;
+        }
+        return this.scores[i];
+    }
+
+    public void clear() {
+        i32 i = 0;
+        while (i < 169) {
+            this.cands[i] = 0;
+            this.scores[i] = 0;
+            i = i + 1;
+        }
+        this.count = 0;
+    }
+}

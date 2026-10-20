@@ -1,0 +1,203 @@
+// test_tactics.hust - 战术点识别单元测试（Phase 3，实战盘版）
+//
+// 重要背景：Board 的构造器会摆上强制扭十字开局，new Board() 不是空盘。
+//   Black: (6,6) 和 (7,7)   主对角
+//   White: (6,7) 和 (7,6)   反对角
+// 四子各剩 2 气，黑方视角下有 4 个叫吃点。
+//
+// 因此所有场景都建在「开局盘 + 边角额外落子」之上，不再假设空盘。
+//
+// 落子方式：Hust 传参是 clone 语义，形参在函数体内就是独立副本，
+// 直接改不会影响调用方。所以这里用 b.set() 就地落子，不用返回值传递。
+
+use board;
+use ai_env_tactics;
+
+void test_opening_board() {
+    println!("Test 1: 扭十字开局 —— 4 个叫吃点");
+    Board b = new Board();
+    Tactics t = new Tactics();
+    b = t.generate(b, 1, 9);
+    if (t.size() == 4) {
+        println!("  [PASS] 开局有 4 个候选点");
+    } else {
+        println!("  [FAIL] 开局应为 4 个，实际 {}", t.size());
+    }
+    if (t.score_at(0) == 40) {
+        println!("  [PASS] 开局候选点是叫吃点（40 分）");
+    } else {
+        println!("  [FAIL] 应为 40 分，实际 {}", t.score_at(0));
+    }
+}
+
+void test_single_opponent_stone() {
+    println!("Test 2: 边角对方单子（4 气）—— 紧气点");
+    Board b = new Board();
+    b.set(2, 2, 2);          // 白子落角，4 气，离中心开局很远
+    Tactics t = new Tactics();
+    b = t.generate(b, 1, 9);
+    // 期望：白子(2,2) 的 4 个邻点各得 10 分（紧气）
+    i32 found_liberty = 0;
+    for (i32 i = 0; i < t.size(); i++) {
+        if (t.score_at(i) == 10) {
+            found_liberty = found_liberty + 1;
+        }
+    }
+    if (found_liberty >= 4) {
+        println!("  [PASS] 找到 {} 个紧气点（>=4）", found_liberty);
+    } else {
+        println!("  [FAIL] 紧气点应 >=4，实际 {}", found_liberty);
+    }
+}
+
+void test_capture_point() {
+    println!("Test 3: 边界白子只剩 1 气 —— 提子点");
+    Board b = new Board();
+    // 白子 (0,0) 在角上，只有 2 气；黑子堵住 (1,0)，只剩 (0,1)
+    b.set(0, 0, 2);
+    b.set(1, 0, 1);
+    Tactics t = new Tactics();
+    b = t.generate(b, 1, 9);
+    i32 best_score = 0;
+    if (t.size() > 0) {
+        best_score = t.score_at(0);
+    }
+    if (best_score == 100) {
+        println!("  [PASS] 最高分为 100（提子）");
+    } else {
+        println!("  [FAIL] 最高分应为 100，实际 {}", best_score);
+    }
+    if (t.size() > 0 && t.at(0) == 0 * 13 + 1) {
+        println!("  [PASS] 最佳点就是那口气 (0,1)");
+    } else {
+        i32 got = -1;
+        if (t.size() > 0) { got = t.at(0); }
+        println!("  [FAIL] 最佳点应为 (0,1)=1，实际 {}", got);
+    }
+}
+
+void test_atari_point() {
+    println!("Test 4: 白子被打成 2 气 —— 叫吃点");
+    Board b = new Board();
+    // 白子 (2,2)，黑子堵住左边和上面，剩 (3,2) 和 (2,3) 两气
+    b.set(2, 2, 2);
+    b.set(1, 2, 1);
+    b.set(2, 1, 1);
+    Tactics t = new Tactics();
+    b = t.generate(b, 1, 9);
+    i32 best_score = 0;
+    if (t.size() > 0) {
+        best_score = t.score_at(0);
+    }
+    if (best_score >= 40) {
+        println!("  [PASS] 最高分 >= 40（叫吃）");
+    } else {
+        println!("  [FAIL] 最高分应 >= 40，实际 {}", best_score);
+    }
+}
+
+void test_rescue_point() {
+    println!("Test 5: 己方黑子只剩 1 气 —— 自补点");
+    Board b = new Board();
+    // 黑子 (2,2) 在角附近，白子堵三面，只剩 (3,2)
+    b.set(2, 2, 1);
+    b.set(1, 2, 2);
+    b.set(2, 1, 2);
+    b.set(2, 3, 2);
+    Tactics t = new Tactics();
+    b = t.generate(b, 1, 9);
+    i32 found_rescue = 0;
+    for (i32 i = 0; i < t.size(); i++) {
+        if (t.score_at(i) == 60) {
+            found_rescue = found_rescue + 1;
+        }
+    }
+    if (found_rescue > 0) {
+        println!("  [PASS] 识别到自补点 {} 个", found_rescue);
+    } else {
+        println!("  [FAIL] 应识别到自补点");
+    }
+}
+
+void test_sorting() {
+    println!("Test 6: 排序 —— 提子点应排在紧气点前面");
+    Board b = new Board();
+    // 左边：白子在 (2,2)，4 气 → 紧气点
+    b.set(2, 2, 2);
+    // 右下：白子 (10,10) 被围成 1 气 → 提子点
+    b.set(10, 10, 2);
+    b.set(9, 10, 1);
+    b.set(11, 10, 1);
+    b.set(10, 9, 1);
+    Tactics t = new Tactics();
+    b = t.generate(b, 1, 20);
+    if (t.size() > 0) {
+        if (t.score_at(0) == 100) {
+            println!("  [PASS] 首位是提子点（100 分）");
+        } else {
+            println!("  [FAIL] 首位分数应为 100，实际 {}", t.score_at(0));
+        }
+        bool sorted = true;
+        for (i32 i = 1; i < t.size(); i++) {
+            if (t.score_at(i - 1) < t.score_at(i)) {
+                sorted = false;
+            }
+        }
+        if (sorted) {
+            println!("  [PASS] 整体降序正确");
+        } else {
+            println!("  [FAIL] 排序不是降序");
+        }
+    }
+}
+
+void test_top_n() {
+    println!("Test 7: top_n 截断");
+    Board b = new Board();
+    b.set(2, 2, 2);
+    b.set(2, 6, 2);
+    b.set(2, 10, 2);
+    b.set(6, 2, 2);
+    b.set(10, 6, 2);
+    Tactics t = new Tactics();
+    b = t.generate(b, 1, 3);
+    if (t.size() == 3) {
+        println!("  [PASS] 截断为 3 个");
+    } else {
+        println!("  [FAIL] 应为 3，实际 {}", t.size());
+    }
+    Tactics t9 = new Tactics();
+    b = t9.generate(b, 1, 9);
+    if (t9.size() == 9) {
+        println!("  [PASS] 上限 9 生效");
+    } else {
+        println!("  [FAIL] 应为 9，实际 {}", t9.size());
+    }
+}
+
+void test_clear() {
+    println!("Test 8: clear 重置");
+    Board b = new Board();
+    b.set(2, 2, 2);
+    Tactics t = new Tactics();
+    b = t.generate(b, 1, 9);
+    t.clear();
+    if (t.size() == 0) {
+        println!("  [PASS] 清空后 size 为 0");
+    } else {
+        println!("  [FAIL] 清空后应为 0");
+    }
+}
+
+void main() {
+    println!("=== Tactics 测试（实战盘）===");
+    test_opening_board();
+    test_single_opponent_stone();
+    test_capture_point();
+    test_atari_point();
+    test_rescue_point();
+    test_sorting();
+    test_top_n();
+    test_clear();
+    println!("=== 测试完成 ===");
+}
