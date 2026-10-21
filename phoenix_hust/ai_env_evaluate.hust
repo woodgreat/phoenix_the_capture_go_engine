@@ -1,0 +1,81 @@
+// ai_env_evaluate.hust - Phase 4: layered position evaluation
+//
+// Layers (implemented in dependency order):
+//   L1 terminal        target reached -> +/-EVAL_WIN        
+//   L2 quota weight    urgency as a target gets close       
+//   L4 non-linear libs 1 lib >> 2 libs >> 3-4 >> 5+         
+//   L3 fight groups    shared / outer liberties             
+//   L5 forcing         fewer legal replies is better        
+//   L6 ko              tactical value of a ko               
+//
+// Perspective: every function returns a score from the "side" viewpoint.
+//   Internally reuses Board.evaluate_for(side), which is already
+//   side-relative, and flips the terminal score by side, so callers never
+//   need to negate anything.
+//
+// Full board is unreachable (confirmed 2026-10-21): there is no pass, so
+// the opponent must keep filling until captured. The empty_count == 0
+// branch of check_game_over is dead code and is not repeated here.
+//
+// Source language policy (2026-10-21): ASCII only.
+
+use board;
+
+// Gap at which quota weighting starts to matter.
+const i32 GAP_URGENT = 3;
+
+// Terminal scores must dominate any static evaluation but still leave room
+// for later layers to accumulate.
+const i32 EVAL_WIN = 900000;
+
+class Evaluate {
+    // Main entry: static score from side's viewpoint.
+    public i32 evaluate(Board b, i32 side) {
+        i32 opp = b.opponent(side);
+        i32 my_cap = b.get_captures(side);
+        i32 opp_cap = b.get_captures(opp);
+
+        // L1: terminal test
+        if (my_cap >= this.target_of(side)) {
+            return EVAL_WIN;
+        }
+        if (opp_cap >= this.target_of(opp)) {
+            return 0 - EVAL_WIN;
+        }
+
+        // L2: quota weighting
+        // Hust compiles methods with a mutable receiver, so
+        // this.foo(this.bar(x)) triggers E0499 (two mutable borrows at
+        // once). Evaluate the inner call first, then pass the value.
+        i32 base = b.evaluate_for(side);
+        i32 my_target = this.target_of(side);
+        i32 opp_target = this.target_of(opp);
+        i32 mine = this.gap_bonus(my_target - my_cap, 4000, 1200, 300);
+        i32 theirs = this.gap_bonus(opp_target - opp_cap, 5000, 1500, 400);
+        return base + mine - theirs;
+    }
+
+    // Capture targets: black 6, white 5 (asymmetric Wood Capture Go rule).
+    public i32 target_of(i32 color) {
+        if (color == 1) {
+            return BLACK_TARGET;
+        }
+        return WHITE_TARGET;
+    }
+
+    // Gap lookup table: the smaller the gap, the closer to winning.
+    //   gap == 0 is handled by L1 and never reaches here.
+    //   gap 1 -> d1, gap 2 -> d2, gap 3 -> d3, anything else -> 0.
+    public i32 gap_bonus(i32 gap, i32 d1, i32 d2, i32 d3) {
+        if (gap == 1) {
+            return d1;
+        }
+        if (gap == 2) {
+            return d2;
+        }
+        if (gap == GAP_URGENT) {
+            return d3;
+        }
+        return 0;
+    }
+}

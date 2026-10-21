@@ -1,0 +1,114 @@
+// test_evaluate.hust - Phase 4 evaluation unit tests (4.1 / 4.2)
+//
+// Style: each assertion prints PASS/FAIL in its own if/else block.
+// No global counters: Hust top-level variables compile to const bindings
+// and cannot be assigned inside functions.
+//
+// Source language policy (2026-10-21): code stays ASCII-only. Comments,
+// identifiers and printed strings are English. Docs may stay Chinese.
+
+use board;
+use ai_env_evaluate;
+
+void check(bool cond, String name) {
+    if (cond) {
+        println!("  [PASS] {}", name);
+    } else {
+        println!("  [FAIL] {}", name);
+    }
+}
+
+void test_targets() {
+    println!("Test 1: capture targets (black 6, white 5, asymmetric)");
+    Evaluate ev = new Evaluate();
+    check(ev.target_of(1) == 6, "black target is 6");
+    check(ev.target_of(2) == 5, "white target is 5");
+}
+
+void test_black_win() {
+    println!("Test 2: terminal - black reached 6 captures");
+    Evaluate ev = new Evaluate();
+    Board b = new Board();
+    b.set_captures(1, 6);
+    b.set_captures(2, 0);
+    check(ev.evaluate(b, 1) == 900000, "black side returns +EVAL_WIN");
+    check(ev.evaluate(b, 2) == -900000, "white side returns -EVAL_WIN");
+}
+
+void test_white_win() {
+    println!("Test 3: terminal - white reached 5 captures");
+    Evaluate ev = new Evaluate();
+    Board b = new Board();
+    b.set_captures(1, 0);
+    b.set_captures(2, 5);
+    check(ev.evaluate(b, 2) == 900000, "white side returns +EVAL_WIN");
+    check(ev.evaluate(b, 1) == -900000, "black side returns -EVAL_WIN");
+}
+
+void test_asymmetric() {
+    println!("Test 4: asymmetry - white wins at 5, black needs 6");
+    Evaluate ev = new Evaluate();
+    Board b = new Board();
+    b.set_captures(1, 5);
+    b.set_captures(2, 0);
+    check(ev.evaluate(b, 1) != 900000, "black with 5 captures not terminal");
+    b.set_captures(1, 0);
+    b.set_captures(2, 5);
+    check(ev.evaluate(b, 2) == 900000, "white with 5 captures is terminal");
+}
+
+void test_not_over() {
+    println!("Test 5: non-terminal score stays in the middle band");
+    Evaluate ev = new Evaluate();
+    Board b = new Board();
+    b.set_captures(1, 0);
+    b.set_captures(2, 0);
+    i32 s0 = ev.evaluate(b, 1);
+    check(s0 > -900000 && s0 < 900000, "0-0 captures is not terminal");
+}
+
+void test_own_progress() {
+    println!("Test 6: quota weight - own progress raises the score");
+    Evaluate ev = new Evaluate();
+    Board b = new Board();
+    b.set_captures(1, 0);
+    b.set_captures(2, 0);
+    i32 base = ev.evaluate(b, 1);
+    b.set_captures(1, 5);
+    i32 near = ev.evaluate(b, 1);
+    check(near > base, "black 5 captures scores above black 0");
+}
+
+void test_opp_progress() {
+    println!("Test 7: quota weight - opponent progress lowers the score");
+    Evaluate ev = new Evaluate();
+    Board b = new Board();
+    b.set_captures(1, 0);
+    b.set_captures(2, 0);
+    i32 base = ev.evaluate(b, 1);
+    b.set_captures(2, 4);
+    i32 opp_near = ev.evaluate(b, 1);
+    check(opp_near < base, "white at 4 captures lowers black score");
+}
+
+void test_gap_table() {
+    println!("Test 8: gap lookup table boundaries");
+    Evaluate ev = new Evaluate();
+    check(ev.gap_bonus(1, 4000, 1200, 300) == 4000, "gap 1 returns d1");
+    check(ev.gap_bonus(2, 4000, 1200, 300) == 1200, "gap 2 returns d2");
+    check(ev.gap_bonus(3, 4000, 1200, 300) == 300, "gap 3 returns d3");
+    check(ev.gap_bonus(4, 4000, 1200, 300) == 0, "gap 4 returns 0");
+}
+
+void main() {
+    println!("=== Evaluate tests (Phase 4.1 / 4.2) ===");
+    test_targets();
+    test_black_win();
+    test_white_win();
+    test_asymmetric();
+    test_not_over();
+    test_own_progress();
+    test_opp_progress();
+    test_gap_table();
+    println!("=== done ===");
+}
