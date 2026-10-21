@@ -1,12 +1,12 @@
 // ai_env_evaluate.hust - Phase 4: layered position evaluation
 //
 // Layers (implemented in dependency order):
-//   L1 terminal        target reached -> +/-EVAL_WIN        
-//   L2 quota weight    urgency as a target gets close       
-//   L4 non-linear libs 1 lib >> 2 libs >> 3-4 >> 5+         
-//   L3 fight groups    shared / outer liberties             
-//   L5 forcing         fewer legal replies is better        
-//   L6 ko              tactical value of a ko               
+//   L1 terminal        target reached -> +/-EVAL_WIN
+//   L2 quota weight    urgency as a target gets close
+//   L4 non-linear libs 1 lib >> 2 libs >> 3-4 >> 5+
+//   L3 fight groups    shared / outer liberties
+//   L5 forcing         fewer legal replies is better
+//   L6 ko              tactical value of a ko
 //
 // Perspective: every function returns a score from the "side" viewpoint.
 //   Internally reuses Board.evaluate_for(side), which is already
@@ -20,6 +20,7 @@
 // Source language policy (2026-10-21): ASCII only.
 
 use board;
+use ai_env_datatypes;
 
 // Gap at which quota weighting starts to matter.
 const i32 GAP_URGENT = 3;
@@ -27,6 +28,17 @@ const i32 GAP_URGENT = 3;
 // Terminal scores must dominate any static evaluation but still leave room
 // for later layers to accumulate.
 const i32 EVAL_WIN = 900000;
+
+// L4 non-linear liberty weights. A group in atari is worth far more than
+// twice a group with two liberties, so the steps are steep, not linear.
+//   1 liberty  -> LIB_ATARI    about to be captured
+//   2 liberties -> LIB_DANGER   under attack
+//   3 liberties -> LIB_WARN     playable
+//   4+         -> 0             safe
+const i32 LIB_ATARI = 12000;
+const i32 LIB_DANGER = 3000;
+const i32 LIB_WARN = 600;
+const i32 LIB_SAFE_MIN = 4;
 
 class Evaluate {
     // Main entry: static score from side's viewpoint.
@@ -52,7 +64,14 @@ class Evaluate {
         i32 opp_target = this.target_of(opp);
         i32 mine = this.gap_bonus(my_target - my_cap, 4000, 1200, 300);
         i32 theirs = this.gap_bonus(opp_target - opp_cap, 5000, 1500, 400);
-        return base + mine - theirs;
+
+        // L4: non-linear liberty pressure
+        // My endangered groups cost me; the opponent's endangered groups
+        // pay me, so the difference is taken rather than a plain sum.
+        i32 my_risk = this.liberty_risk(b, side);
+        i32 opp_risk = this.liberty_risk(b, opp);
+
+        return base + mine - theirs - my_risk + opp_risk;
     }
 
     // Capture targets: black 6, white 5 (asymmetric Wood Capture Go rule).
@@ -77,5 +96,49 @@ class Evaluate {
             return d3;
         }
         return 0;
+    }
+
+    // L4 weight for a single group, by its liberty count.
+    public i32 liberty_weight(i32 libs) {
+        if (libs == 1) {
+            return LIB_ATARI;
+        }
+        if (libs == 2) {
+            return LIB_DANGER;
+        }
+        if (libs == 3) {
+            return LIB_WARN;
+        }
+        return 0;
+    }
+
+    // Sum of the L4 penalty over every live group of the given colour.
+    // Zero-liberty groups are already captured and carry no risk.
+    public i32 liberty_risk(Board b, i32 color) {
+        GroupManager gm = new GroupManager();
+        i32[169] grid = this.flatten(b);
+        gm.build_from_grid(grid);
+
+        i32 risk = 0;
+        for (i32 i = 0; i < gm.group_count; i++) {
+            Group g = gm.groups[i];
+            if (g.color == color) {
+                risk = risk + this.liberty_weight(g.lib_count);
+            }
+        }
+        return risk;
+    }
+
+    // Flatten the 13x13 board into the i32[169] layout build_from_grid
+    // expects. Hust cannot yet return an array-typed value (B42), so this
+    // runs as an out-of-class helper and the caller keeps the buffer.
+    public i32[169] flatten(Board b) {
+        i32[169] grid = {0};
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                grid[x * 13 + y] = b.get(x, y);
+            }
+        }
+        return grid;
     }
 }
