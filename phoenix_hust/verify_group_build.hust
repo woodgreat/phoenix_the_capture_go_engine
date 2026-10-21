@@ -1,0 +1,98 @@
+// verify_group_build.hust - data-layer probe promoted to a regression test
+//
+// Phase 4.4 prerequisite: L4 (non-linear liberty penalty) needs per-group
+// liberty counts from the board. This asserts that the data layer supplies
+// them on a known position.
+//
+// Note: array-typed function RETURNS are not supported by Hust yet
+// (see B42), so the flatten step is inlined at each call site.
+//
+// Source language policy: ASCII only.
+
+use board;
+use ai_env_datatypes;
+
+void check(bool cond, String name) {
+    if (cond) {
+        println!("  [PASS] {}", name);
+    } else {
+        println!("  [FAIL] {}", name);
+    }
+}
+
+void test_opening_groups() {
+    println!("Test 1: opening board has 4 single-stone groups, 2 liberties each");
+    Board b = new Board();
+    i32[169] grid = {0};
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            grid[x * 13 + y] = b.get(x, y);
+        }
+    }
+    GroupManager gm = new GroupManager();
+    gm.build_from_grid(grid);
+
+    check(gm.group_count == 4, "opening board has 4 groups");
+
+    bool all_two_libs = true;
+    for (i32 i = 0; i < gm.group_count; i++) {
+        Group g = gm.groups[i];
+        if (g.lib_count != 2) {
+            all_two_libs = false;
+        }
+    }
+    check(all_two_libs, "every opening group has exactly 2 liberties");
+
+    bool all_single = true;
+    for (i32 i = 0; i < gm.group_count; i++) {
+        Group g = gm.groups[i];
+        if (g.size != 1) {
+            all_single = false;
+        }
+    }
+    check(all_single, "every opening group is a single stone");
+}
+
+void test_rebuild_is_clean() {
+    println!("Test 2: rebuilding from the same grid does not accumulate groups");
+    Board b = new Board();
+    i32[169] grid = {0};
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            grid[x * 13 + y] = b.get(x, y);
+        }
+    }
+    GroupManager gm = new GroupManager();
+    gm.build_from_grid(grid);
+    i32 first = gm.group_count;
+    gm.build_from_grid(grid);
+    check(gm.group_count == first, "rebuild does not accumulate groups");
+    check(first == 4, "first build found 4 groups");
+}
+
+void test_get_group_lib_count() {
+    println!("Test 3: accessor agrees with the stored field");
+    Board b = new Board();
+    i32[169] grid = {0};
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            grid[x * 13 + y] = b.get(x, y);
+        }
+    }
+    GroupManager gm = new GroupManager();
+    gm.build_from_grid(grid);
+    if (gm.group_count > 0) {
+        i32 direct = gm.get_group_lib_count(0);
+        check(direct == 2, "group 0 accessor returns 2 liberties");
+    } else {
+        println!("  [FAIL] opening board produced no groups");
+    }
+}
+
+void main() {
+    println!("=== Group build tests (Phase 4.4 prep) ===");
+    test_opening_groups();
+    test_rebuild_is_clean();
+    test_get_group_lib_count();
+    println!("=== done ===");
+}
