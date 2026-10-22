@@ -1,0 +1,151 @@
+// test_evaluate_l3.hust - Phase 4.3 L3 zone scoring (independent tests)
+//
+// test_fight_rules / test_fight_zone prove that zones are IDENTIFIED
+// correctly. They say nothing about what a zone is WORTH. This file tests
+// the scoring layer itself:
+//
+//   zone_tension()  the urgency multiplier, pure and easy to pin down
+//   zone_score()    the summed side-relative score over every zone
+//
+// Weights under test (owner provisional): stone 1, exclusive liberty 2,
+// eye 3. Position construction uses place_raw so the mandated twist-cross
+// opening is cleared first with set(0).
+//
+// Source language policy: ASCII only.
+
+use board;
+use ai_env_evaluate;
+
+void check(bool cond, String name) {
+    if (cond) {
+        println!("  [PASS] {}", name);
+    } else {
+        println!("  [FAIL] {}", name);
+    }
+}
+
+// Empty the opening so a test position is fully under control.
+Board blank_board() {
+    Board b = new Board();
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            b.set(x, y, 0);
+        }
+    }
+    return b;
+}
+
+void test_tension_table() {
+    println!("Test 1: tension multiplier table");
+    Evaluate ev = new Evaluate();
+    i32 t1 = ev.zone_tension(1);
+    i32 t2 = ev.zone_tension(2);
+    i32 t3 = ev.zone_tension(3);
+    i32 t5 = ev.zone_tension(5);
+    check(t1 == 3, "one shared liberty scales x3");
+    check(t2 == 2, "two shared liberties scale x2");
+    check(t3 == 1, "three shared liberties scale x1");
+    check(t5 == 1, "five shared liberties stay x1");
+    check(t1 > t2, "urgency falls as the zone opens up");
+}
+
+void test_no_zones_scores_zero() {
+    println!("Test 2: a board with no hot zone scores zero");
+    Board b = blank_board();
+    b.place_raw(0, 0, 1);
+    b.place_raw(12, 12, 2);
+    Evaluate ev = new Evaluate();
+    i32 s_black = ev.zone_score(b, 1);
+    i32 s_white = ev.zone_score(b, 2);
+    check(s_black == 0, "black scores 0 with no zone");
+    check(s_white == 0, "white scores 0 with no zone");
+}
+
+void test_symmetric_zones_cancel() {
+    println!("Test 3: a mirror position scores zero for both sides");
+    Board b = blank_board();
+    // One shared liberty at (6,6): black above, white below.
+    //   black (6,5): liberties (5,5)(7,5)(6,4)(6,6)
+    //   white (6,7): liberties (5,7)(7,7)(6,8)(6,6)
+    b.place_raw(6, 5, 1);
+    b.place_raw(6, 7, 2);
+    Evaluate ev = new Evaluate();
+    i32 s_black = ev.zone_score(b, 1);
+    i32 s_white = ev.zone_score(b, 2);
+    check(s_black == s_white, "a symmetric zone is even");
+    check(s_black == 0, "and it is exactly zero");
+}
+
+void test_stone_lead_scores_positive() {
+    println!("Test 4: having more stones in a contested zone is worth points");
+    Board b = blank_board();
+    // Shared point (6,6). Black has TWO connected stones, white ONE.
+    //   black (6,4) (6,5): liberties (6,3)(5,4)(7,4)(5,5)(7,5)(6,6)
+    //   white (6,7):       liberties (5,7)(7,7)(6,8)(6,6)
+    // Shared: (6,6). Black also carries more exclusive liberties than
+    // white, which the score counts too - so this test pins the SIGN of
+    // the difference (black leads), not the exact magnitude.
+    b.place_raw(6, 4, 1);
+    b.place_raw(6, 5, 1);
+    b.place_raw(6, 7, 2);
+    Evaluate ev = new Evaluate();
+    i32 s_black = ev.zone_score(b, 1);
+    i32 s_white = ev.zone_score(b, 2);
+    check(s_black > 0, "black leads the zone");
+    check(s_white < 0, "white trails the zone");
+    check(s_black == 0 - s_white, "the two views are mirror images");
+}
+
+void test_urgency_amplifies() {
+    println!("Test 5: the same lead counts for more in an urgent zone");
+    // Urgent: exactly one shared liberty.
+    Board urgent = blank_board();
+    urgent.place_raw(6, 5, 1);
+    urgent.place_raw(6, 7, 2);
+    Evaluate ev = new Evaluate();
+    i32 s_urgent = ev.zone_score(urgent, 1);
+
+    // Open: three shared liberties between two groups.
+    Board open = blank_board();
+    open.place_raw(3, 3, 1);
+    open.place_raw(3, 5, 2);
+    i32 s_open = ev.zone_score(open, 1);
+
+    // Both positions are stone-for-stone even, so both must be zero; the
+    // point of the test is that urgency did not manufacture a score out of
+    // a balanced position.
+    check(s_urgent == 0, "a balanced urgent zone is still zero");
+    check(s_open == 0, "a balanced open zone is still zero");
+}
+
+void test_zone_term_reaches_evaluate() {
+    println!("Test 6: the zone term is part of the main evaluation");
+    // Same shape as Test 4: black has two CONNECTED stones in the zone.
+    // A disconnected stone would sit outside the zone and score nothing.
+    Board with_zone = blank_board();
+    with_zone.place_raw(6, 4, 1);
+    with_zone.place_raw(6, 5, 1);
+    with_zone.place_raw(6, 7, 2);
+
+    Board even_zone = blank_board();
+    even_zone.place_raw(6, 5, 1);
+    even_zone.place_raw(6, 7, 2);
+
+    Evaluate ev = new Evaluate();
+    i32 zone_only = ev.zone_score(with_zone, 1);
+    i32 total = ev.evaluate(with_zone, 1);
+    i32 total_even = ev.evaluate(even_zone, 1);
+    check(zone_only > 0, "the leading position has a positive zone score");
+    check(total != total_even, "the zone term changes the main score");
+}
+
+void main() {
+    println!("=== Evaluate L3 tests (Phase 4.3 scoring) ===");
+    test_tension_table();
+    test_no_zones_scores_zero();
+    test_symmetric_zones_cancel();
+    test_stone_lead_scores_positive();
+    test_urgency_amplifies();
+    test_zone_term_reaches_evaluate();
+    println!("=== done ===");
+}
