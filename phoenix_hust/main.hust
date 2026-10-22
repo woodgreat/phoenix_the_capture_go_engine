@@ -190,7 +190,7 @@ void main() {
                 || a1 == "sb" || a1 == "show" || a1 == "undo"
                 || a1 == "final_score" || a1 == "fixed_handicap"
                 || a1 == "wood_captures" || a1 == "sc" || a1 == "show"
-                || a1 == "wood_target" || a1 == "wood_game_over"
+                || a1 == "wood_target" || a1 == "board_status"
                 || a1 == "wood_rules" || a1 == "wood_ai_level"
                 || a1 == "set" || a1 == "result" || a1 == "rw") {
                 k = "true";
@@ -224,7 +224,7 @@ void main() {
             println!("wood_ai_level");
             println!("wood_captures");
             println!("wood_target");
-            println!("wood_game_over");
+            println!("board_status");
             println!("wood_rules");
             println!("result");
             println!("rw");
@@ -378,7 +378,7 @@ void main() {
             } else {
                 println!("?{}unknown command", p);
             }
-        } else if (cmd == "wood_game_over") {
+        } else if (cmd == "board_status") {
             i32 empties = 0;
             for (i32 x = 0; x < 13; x++) {
                 for (i32 y = 0; y < 13; y++) {
