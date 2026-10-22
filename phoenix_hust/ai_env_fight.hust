@@ -181,6 +181,36 @@ class FightBuilder {
                 }
             }
 
+            // Exclusive liberties: what each side can still fill on its own.
+            // A liberty is exclusive when no group of the other colour lists
+            // the same point. These are the effectiveness inputs the zone
+            // score compares; shared points belong to neither side outright.
+            for (i32 gi = 0; gi < fg.group_count; gi++) {
+                Group g = fg.groups[gi];
+                for (i32 li = 0; li < g.lib_top; li++) {
+                    i32 enc = g.libs[li];
+                    bool shared = false;
+                    for (i32 gj = 0; gj < fg.group_count; gj++) {
+                        Group other = fg.groups[gj];
+                        if (other.color == g.color) {
+                            continue;
+                        }
+                        for (i32 lj = 0; lj < other.lib_top; lj++) {
+                            if (other.libs[lj] == enc) {
+                                shared = true;
+                            }
+                        }
+                    }
+                    if (!shared) {
+                        if (g.color == 1) {
+                            fg.black_libs = fg.black_libs + 1;
+                        } else if (g.color == 2) {
+                            fg.white_libs = fg.white_libs + 1;
+                        }
+                    }
+                }
+            }
+
             // expand the zone: boundary stones grow it by one step
             i32[169] in_zone = {0};
             for (i32 si = 0; si < fg.stone_count; si++) {

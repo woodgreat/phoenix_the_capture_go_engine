@@ -1,5 +1,24 @@
 // ai.hust - AI strategy layer (shape-interface pattern, r44)
 //
+// ALGORITHM FAMILY: SCM A.I - Simple Counting Method.
+//   Chinese: 简洁数势力法. It counts the EFFECTIVENESS OF STONES (势 = 子的
+//   效能), not merely their number: a stone is worth more where it has
+//   liberties, connections and eye potential, less where it is surrounded
+//   and short of air. The method evaluates statically in layers and does
+//   not rely on deep search.
+//
+//   This file is one instance of that family. The LevelN classes are
+//   STRENGTH TIERS of the same algorithm (more tiers = deeper lookahead
+//   and a richer layer mix), not different algorithms. Other agents on the
+//   same board may implement entirely different families; SCM A.I names
+//   only this one.
+//
+//   Layer stack (see ai_env_evaluate.hust):
+//     L1 terminal -> L2 quota -> L4 non-linear liberties -> L3 fight zones
+//     -> L5 forcing -> L6 ko
+//
+//   Perspective of every layer: the side being scored.
+//
 // Declaration: no types (shape). Implementation: types filled in.
 // Ownership round-trip: the board moves INTO genmove, the AI places
 // its stone, and the board moves BACK to the caller

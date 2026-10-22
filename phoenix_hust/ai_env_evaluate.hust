@@ -1,5 +1,9 @@
 // ai_env_evaluate.hust - Phase 4: layered position evaluation
 //
+// Part of SCM A.I (Simple Counting Method / 简洁数势力法): it scores the
+// EFFECTIVENESS OF STONES, layer by layer, without deep search. See ai.hust
+// for the family definition; this file holds the static evaluator only.
+//
 // Layers (implemented in dependency order):
 //   L1 terminal        target reached -> +/-EVAL_WIN
 //   L2 quota weight    urgency as a target gets close
@@ -21,6 +25,7 @@
 
 use board;
 use ai_env_datatypes;
+use ai_env_fight;
 
 // Gap at which quota weighting starts to matter.
 const i32 GAP_URGENT = 3;
@@ -39,6 +44,35 @@ const i32 LIB_ATARI = 12000;
 const i32 LIB_DANGER = 3000;
 const i32 LIB_WARN = 600;
 const i32 LIB_SAFE_MIN = 4;
+
+// === L3 fight zone scoring (2026-10-22) ===
+//
+// A hot zone is scored by comparing how much each side's stones are WORTH
+// inside it - the SCM A.I principle that a stone's value is its
+// effectiveness, not its count. Three inputs, weighted:
+//
+//   stones  base presence
+//   liberties what the side can still fill on its own (shared points are
+//             contested, so they belong to neither side outright)
+//   eyes    confirmed shape that cannot be taken away
+//
+// Weights are PROVISIONAL (owner 2026-10-22: stone/lib/eye = 1/2/3, use
+// now, tune later). They express priority, not measured strength.
+const i32 ZONE_W_STONE = 1;
+const i32 ZONE_W_LIB = 2;
+const i32 ZONE_W_EYE = 3;
+
+// Tension of a zone by its shared liberty count: a zone with one shared
+// point is about to be resolved, a zone with several is still open. The
+// multiplier scales the whole zone difference, because an urgent zone
+// matters more than a quiet one of the same size.
+//   shared 1 -> x3 (decided next move)
+//   shared 2 -> x2
+//   shared 3+ -> x1
+const i32 ZONE_TENSION_1 = 3;
+const i32 ZONE_TENSION_2 = 2;
+const i32 ZONE_TENSION_MANY = 1;
+const i32 ZONE_TENSION_NONE = 1;
 
 class Evaluate {
     // Main entry: static score from side's viewpoint.
@@ -71,7 +105,11 @@ class Evaluate {
         i32 my_risk = this.liberty_risk(b, side);
         i32 opp_risk = this.liberty_risk(b, opp);
 
-        return base + mine - theirs - my_risk + opp_risk;
+        // L3: fight zones. zone_score already returns the side-relative
+        // difference summed over every zone, so it is added as is.
+        i32 zone = this.zone_score(b, side);
+
+        return base + mine - theirs - my_risk + opp_risk + zone;
     }
 
     // Capture targets: black 6, white 5 (asymmetric Wood Capture Go rule).
@@ -111,6 +149,138 @@ class Evaluate {
         }
         return 0;
     }
+
+    // Sum of the L3 zone score from `side`'s viewpoint.
+
+    //
+
+    // This is the SCM A.I reading of a hot zone: neither side owns a stone by
+
+    // count alone; what counts is how much the stone is WORTH there. Exclusive
+
+    // liberties are the air a side can still use; shared points are contested
+
+    // and belong to neither side outright.
+
+    //
+
+    // Known simplification: FightGroup.eye_count does not record which colour
+
+    // owns each eye, so both sides are credited with half of it. Replace the
+
+    // halving once the zone records eye ownership.
+
+    public i32 zone_score(Board b, i32 side) {
+
+        i32 opp = b.opponent(side);
+
+        GroupManager gm = new GroupManager();
+
+        i32[169] grid = this.flatten(b);
+
+        gm.build_from_grid(grid);
+
+
+
+        FightBuilder fb = new FightBuilder();
+
+        FightGroupManager zones = fb.build(gm, grid);
+
+
+
+        i32 total = 0;
+
+        for (i32 z = 0; z < zones.fight_group_count; z++) {
+
+            FightGroup fg = zones.fight_groups[z];
+
+            i32 my_stones = 0;
+
+            i32 my_libs = 0;
+
+            i32 opp_stones = 0;
+
+            i32 opp_libs = 0;
+
+            if (side == 1) {
+
+                my_stones = fg.black_stones;
+
+                my_libs = fg.black_libs;
+
+                opp_stones = fg.white_stones;
+
+                opp_libs = fg.white_libs;
+
+            } else {
+
+                my_stones = fg.white_stones;
+
+                my_libs = fg.white_libs;
+
+                opp_stones = fg.black_stones;
+
+                opp_libs = fg.black_libs;
+
+            }
+
+            // Eyes are credited to both sides at half weight (see note above).
+
+            i32 eye_share = fg.eye_count / 2;
+
+            i32 mine = my_stones * ZONE_W_STONE + my_libs * ZONE_W_LIB + eye_share * ZONE_W_EYE;
+
+            i32 theirs = opp_stones * ZONE_W_STONE + opp_libs * ZONE_W_LIB + eye_share * ZONE_W_EYE;
+
+            i32 diff = mine - theirs;
+
+            i32 tension = this.zone_tension(fg.shared_lib_count);
+
+            total = total + diff * tension;
+
+        }
+
+        return total;
+
+    }
+
+
+
+    // How much a zone's difference matters, by how soon it resolves.
+
+    //   one shared point   -> decided next move
+
+    //   two shared points  -> pressing
+
+    //   three or more      -> open
+
+    //   none               -> cannot occur (a zone needs a shared liberty)
+
+    public i32 zone_tension(i32 shared) {
+
+        if (shared == 1) {
+
+            return ZONE_TENSION_1;
+
+        }
+
+        if (shared == 2) {
+
+            return ZONE_TENSION_2;
+
+        }
+
+        if (shared >= 3) {
+
+            return ZONE_TENSION_MANY;
+
+        }
+
+        return ZONE_TENSION_NONE;
+
+    }
+
+
 
     // Sum of the L4 penalty over every live group of the given colour.
     // Zero-liberty groups are already captured and carry no risk.

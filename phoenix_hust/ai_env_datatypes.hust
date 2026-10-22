@@ -273,6 +273,14 @@ public class FightGroup {
     // Group counts per colour, so the zone colour is derived, not guessed.
     i32 black_groups;
     i32 white_groups;
+    // Per-colour effectiveness inputs (2026-10-22). The zone score compares
+    // how much each side's stones are worth, so the two sides are counted
+    // apart. exclusive liberties exclude the shared ones, which both sides
+    // could still fill and therefore neither side owns.
+    i32 black_stones;
+    i32 white_stones;
+    i32 black_libs;
+    i32 white_libs;
     // Zone footprint (2026-10-22): every cell inside the hot zone after the
     // boundary stones were grown by one step in all eight directions. This
     // is a superset of stones[]: it also carries empty points and the ring.
@@ -292,6 +300,10 @@ public class FightGroup {
         this.black_groups = 0;
         this.white_groups = 0;
         this.zone_count = 0;
+        this.black_stones = 0;
+        this.white_stones = 0;
+        this.black_libs = 0;
+        this.white_libs = 0;
     }
 
     // Mark one cell as part of the hot zone footprint (deduplicated).
@@ -375,8 +387,10 @@ public class FightGroup {
         // 1 only black, 2 only white, 0 when both are present.
         if (g_color == 1) {
             this.black_groups = this.black_groups + 1;
+            this.black_stones = this.black_stones + g_size;
         } else if (g_color == 2) {
             this.white_groups = this.white_groups + 1;
+            this.white_stones = this.white_stones + g_size;
         }
         if (this.black_groups > 0 && this.white_groups > 0) {
             this.color = 0;
@@ -451,6 +465,10 @@ public class FightGroup {
         this.black_groups = 0;
         this.white_groups = 0;
         this.zone_count = 0;
+        this.black_stones = 0;
+        this.white_stones = 0;
+        this.black_libs = 0;
+        this.white_libs = 0;
         while (this.groups.len() > 0) {
             this.groups.pop();
         }
