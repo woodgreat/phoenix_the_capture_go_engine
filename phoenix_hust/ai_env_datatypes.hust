@@ -257,7 +257,7 @@ public class GroupManager {
 // 3. 支持 DFS+αβ剪枝的局部战斗评估
 public class FightGroup {
     i32 id;                     // FightGroup ID
-    i32 color;                  // 主导颜色：1=黑, 2=白
+    i32 color;                  // 0=双方争夺区, 1=黑主导, 2=白主导
     i32 state;                  // 状态：0=死, 1=活, 2=劫
     Group[] groups;             // 包含的 Group 列表（动态数组）
     i32 group_count;            // Group 数量
@@ -266,6 +266,18 @@ public class FightGroup {
     i32 eye_count;              // 眼位数量
     i32[169] stones;            // 所有棋子位置（去重）
     i32 stone_count;            // 棋子数量（实际）
+    // Shared liberties of the whole hot zone (2026-10-22): the points both
+    // colours can still fill. Together with stones[] this is the zone map.
+    i32[169] shared_libs;
+    i32 shared_lib_count;
+    // Group counts per colour, so the zone colour is derived, not guessed.
+    i32 black_groups;
+    i32 white_groups;
+    // Zone footprint (2026-10-22): every cell inside the hot zone after the
+    // boundary stones were grown by one step in all eight directions. This
+    // is a superset of stones[]: it also carries empty points and the ring.
+    i32[169] zone;
+    i32 zone_count;
     
     public FightGroup() {
         this.id = -1;
@@ -276,6 +288,67 @@ public class FightGroup {
         this.total_libs = 0;
         this.eye_count = 0;
         this.stone_count = 0;
+        this.shared_lib_count = 0;
+        this.black_groups = 0;
+        this.white_groups = 0;
+        this.zone_count = 0;
+    }
+
+    // Mark one cell as part of the hot zone footprint (deduplicated).
+    public bool add_zone_cell(i32 enc) {
+        for (i32 i = 0; i < this.zone_count; i++) {
+            if (this.zone[i] == enc) {
+                return false;
+            }
+        }
+        if (this.zone_count < 169) {
+            this.zone[this.zone_count] = enc;
+            this.zone_count = this.zone_count + 1;
+            return true;
+        }
+        return false;
+    }
+
+    // True when the position belongs to the hot zone footprint.
+    public bool in_zone(i32 enc) {
+        for (i32 i = 0; i < this.zone_count; i++) {
+            if (this.zone[i] == enc) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    // Add a stone position to the zone map (deduplicated). Together with
+    // shared_libs[] this is the map of the hot zone.
+    public bool add_stone(i32 enc) {
+        for (i32 i = 0; i < this.stone_count; i++) {
+            if (this.stones[i] == enc) {
+                return false;
+            }
+        }
+        if (this.stone_count < 169) {
+            this.stones[this.stone_count] = enc;
+            this.stone_count = this.stone_count + 1;
+            return true;
+        }
+        return false;
+    }
+
+    // Add a shared liberty (deduplicated). These are the points that both
+    // colours still have as liberties: the contested spots of the zone.
+    public bool add_shared_lib(i32 enc) {
+        for (i32 i = 0; i < this.shared_lib_count; i++) {
+            if (this.shared_libs[i] == enc) {
+                return false;
+            }
+        }
+        if (this.shared_lib_count < 169) {
+            this.shared_libs[this.shared_lib_count] = enc;
+            this.shared_lib_count = this.shared_lib_count + 1;
+            return true;
+        }
+        return false;
     }
     
     // 添加 Group 到战斗组
@@ -298,9 +371,21 @@ public class FightGroup {
         this.total_size = this.total_size + g_size;
         this.total_libs = this.total_libs + g_lib_count;
         
-        // 更新颜色（以第一个 Group 的颜色为准）
-        if (this.color == 0) {
-            this.color = g_color;
+        // Colour of the zone is derived from the per-colour group counts:
+        // 1 only black, 2 only white, 0 when both are present.
+        if (g_color == 1) {
+            this.black_groups = this.black_groups + 1;
+        } else if (g_color == 2) {
+            this.white_groups = this.white_groups + 1;
+        }
+        if (this.black_groups > 0 && this.white_groups > 0) {
+            this.color = 0;
+        } else if (this.black_groups > 0) {
+            this.color = 1;
+        } else if (this.white_groups > 0) {
+            this.color = 2;
+        } else {
+            this.color = 0;
         }
     }
     
@@ -362,6 +447,10 @@ public class FightGroup {
         this.total_libs = 0;
         this.eye_count = 0;
         this.stone_count = 0;
+        this.shared_lib_count = 0;
+        this.black_groups = 0;
+        this.white_groups = 0;
+        this.zone_count = 0;
         while (this.groups.len() > 0) {
             this.groups.pop();
         }

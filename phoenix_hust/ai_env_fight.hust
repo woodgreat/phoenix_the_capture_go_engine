@@ -1,0 +1,217 @@
+// ai_env_fight.hust - Phase 4.3: fight group (hot zone) construction
+//
+// A hot zone grows out of shared liberties. Owner rule (2026-10-22):
+//
+//   Core    two opposite-coloured groups share 1..2 liberty points.
+//           Those points are the core of the zone. Mutual atari (each side
+//           down to one liberty on the SAME point) is the extreme case of
+//           the same relation, so it needs no separate branch.
+//   Expand  every boundary stone grows the zone by one step in all eight
+//           directions, diagonals included.
+//   Tangled two opposite-coloured stones inside the zone that touch
+//           (again diagonals included) are the tangled pair.
+//
+// Touching alone is not entanglement: the opening board has four mutually
+// adjacent stones and no shared liberty, so it forms no zone at all.
+//
+// Zone colour: 1 only black groups, 2 only white, 0 mixed.
+//
+// Source language policy: ASCII only.
+
+use board;
+use ai_env_datatypes;
+
+const i32 MAX_GROUPS = 169;
+
+class FightBuilder {
+    // Union-find over group indices. A class field so the helpers can share
+    // it (Hust parameters are copies).
+    i32[169] parent;
+
+    public void reset() {
+        for (i32 i = 0; i < MAX_GROUPS; i++) {
+            this.parent[i] = i;
+        }
+    }
+
+    public i32 find(i32 x) {
+        i32 root = x;
+        while (this.parent[root] != root) {
+            root = this.parent[root];
+        }
+        i32 node = x;
+        while (this.parent[node] != node) {
+            i32 next = this.parent[node];
+            this.parent[node] = root;
+            node = next;
+        }
+        return root;
+    }
+
+    public void union(i32 a, i32 b) {
+        i32 ra = this.find(a);
+        i32 rb = this.find(b);
+        if (ra != rb) {
+            this.parent[rb] = ra;
+        }
+    }
+
+    // Number of liberty points the two groups share (0..2 in practice).
+    // Shared means the same empty point is a liberty of both colours, which
+    // is exactly a contested point.
+    public i32 shared_count(Group a, Group b) {
+        i32 n = 0;
+        for (i32 i = 0; i < a.lib_top; i++) {
+            for (i32 j = 0; j < b.lib_top; j++) {
+                if (a.libs[i] == b.libs[j]) {
+                    n = n + 1;
+                }
+            }
+        }
+        return n;
+    }
+
+    // A zone core exists when the two groups share 1 or 2 liberties.
+    public bool related(Group a, Group b) {
+        i32 n = this.shared_count(a, b);
+        return n >= 1 && n <= 2;
+    }
+
+    // Grow one zone by one step from every stone it holds, eight directions.
+    // Returns the set of positions that belong to the zone after expansion.
+    public i32[169] expand(i32[169] in_zone) {
+        i32[169] out_zone = {0};
+        for (i32 k = 0; k < 169; k++) {
+            out_zone[k] = in_zone[k];
+        }
+        i32[8] dxs = {0, 0, 1, -1, 1, 1, -1, -1};
+        i32[8] dys = {1, -1, 0, 0, 1, -1, 1, -1};
+        for (i32 enc = 0; enc < 169; enc++) {
+            if (in_zone[enc] == 0) {
+                continue;
+            }
+            i32 x = enc / 13;
+            i32 y = enc - x * 13;
+            for (i32 d = 0; d < 8; d++) {
+                i32 nx = x + dxs[d];
+                i32 ny = y + dys[d];
+                if (nx >= 0 && nx < 13 && ny >= 0 && ny < 13) {
+                    out_zone[nx * 13 + ny] = 1;
+                }
+            }
+        }
+        return out_zone;
+    }
+
+    // Build every hot zone for the position in gm.
+    public FightGroupManager build(GroupManager gm, i32[169] grid) {
+        this.reset();
+
+        // 1. core: opposite-coloured groups sharing 1 or 2 liberties
+        for (i32 i = 0; i < gm.group_count; i++) {
+            for (i32 j = i + 1; j < gm.group_count; j++) {
+                // Bind inside the loop: a Group passed to a method is moved,
+                // so an outer binding would be consumed by the first pass.
+                Group ga = gm.groups[i];
+                Group gb = gm.groups[j];
+                if (ga.color == gb.color) {
+                    continue;
+                }
+                bool related = this.related(ga, gb);
+                if (related) {
+                    this.union(i, j);
+                }
+            }
+        }
+
+        // 2. one zone per connected component of the core graph
+        FightGroupManager out = new FightGroupManager();
+        i32[169] slot = {0};
+        for (i32 k = 0; k < MAX_GROUPS; k++) {
+            slot[k] = -1;
+        }
+
+        for (i32 i = 0; i < gm.group_count; i++) {
+            i32 root = this.find(i);
+            // A group in no core relation stays alone: no shared liberty,
+            // so it is not a hot zone member.
+            if (slot[root] < 0) {
+                i32 members = this.component_size(gm, root);
+                if (members < 2) {
+                    continue;
+                }
+                FightGroup fg = out.create_fight_group();
+                slot[root] = fg.id;
+            }
+            i32 idx = slot[root];
+            FightGroup fg = out.fight_groups[idx];
+            Group member = gm.groups[i];
+            fg.add_group(member);
+            out.fight_groups.replaceit(idx, fg);
+        }
+
+        // 3. zone map: stones, shared liberties, then one expansion step
+        for (i32 z = 0; z < out.fight_group_count; z++) {
+            FightGroup fg = out.fight_groups[z];
+
+            // stones of the member groups
+            for (i32 gi = 0; gi < fg.group_count; gi++) {
+                Group g = fg.groups[gi];
+                for (i32 si = 0; si < g.stone_count; si++) {
+                    fg.add_stone(g.stones[si]);
+                }
+                // a liberty is shared when the other colour lists it too
+                for (i32 li = 0; li < g.lib_top; li++) {
+                    i32 enc = g.libs[li];
+                    bool shared = false;
+                    for (i32 gj = 0; gj < fg.group_count; gj++) {
+                        Group other = fg.groups[gj];
+                        if (other.color == g.color) {
+                            continue;
+                        }
+                        for (i32 lj = 0; lj < other.lib_top; lj++) {
+                            if (other.libs[lj] == enc) {
+                                shared = true;
+                            }
+                        }
+                    }
+                    if (shared) {
+                        fg.add_shared_lib(enc);
+                    }
+                }
+            }
+
+            // expand the zone: boundary stones grow it by one step
+            i32[169] in_zone = {0};
+            for (i32 si = 0; si < fg.stone_count; si++) {
+                // Bind first: a nested index expression reaches rustc with
+                // i32 inside the brackets and fails to index.
+                i32 stone_enc = fg.stones[si];
+                in_zone[stone_enc] = 1;
+            }
+            i32[169] grown = this.expand(in_zone);
+            for (i32 k = 0; k < 169; k++) {
+                if (grown[k] == 1) {
+                    fg.add_zone_cell(k);
+                }
+            }
+
+            fg.calculate_eyes(grid);
+            fg.update_state();
+            out.fight_groups.replaceit(z, fg);
+        }
+
+        return out;
+    }
+
+    // How many groups sit in the same component as root.
+    i32 component_size(GroupManager gm, i32 root) {
+        i32 n = 0;
+        for (i32 i = 0; i < gm.group_count; i++) {
+            if (this.find(i) == root) {
+                n = n + 1;
+            }
+        }
+        return n;
+    }
+}

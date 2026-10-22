@@ -1,0 +1,152 @@
+// test_fight_zone.hust - Phase 4.3 fight group (hot zone) construction
+//
+// Opening board: black (6,6) and (7,7), white (6,7) and (7,6). The four
+// stones are mutually adjacent, so they all belong to ONE contested zone
+// with shared liberties.
+//
+// Source language policy: ASCII only.
+
+use board;
+use ai_env_datatypes;
+use ai_env_fight;
+
+void check(bool cond, String name) {
+    if (cond) {
+        println!("  [PASS] {}", name);
+    } else {
+        println!("  [FAIL] {}", name);
+    }
+}
+
+i32[169] flatten(Board b) {
+    i32[169] grid = {0};
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            grid[x * 13 + y] = b.get(x, y);
+        }
+    }
+    return grid;
+}
+
+void test_opening_has_no_zone() {
+    println!("Test 1: opening stones touch but share no liberty, so no zone");
+    Board b = new Board();
+    i32[169] grid = flatten(b);
+    GroupManager gm = new GroupManager();
+    gm.build_from_grid(grid);
+
+    FightBuilder fb = new FightBuilder();
+    FightGroupManager fgm = fb.build(gm, grid);
+
+    // The four opening stones are mutually adjacent, but their liberties
+    // do not overlap, so by the owner rule there is no hot zone here.
+    i32 zones = fgm.fight_group_count;
+    check(gm.group_count == 4, "opening has 4 groups");
+    check(zones == 0, "touching without shared liberties is not a zone");
+}
+
+void test_shared_liberty_zone() {
+    println!("Test 2: groups sharing a liberty form one zone");
+    Board b = new Board();
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            b.set(x, y, 0);
+        }
+    }
+    // Black (2,2) and white (2,4) both border the point (2,3).
+    //   black liberties: (1,2) (3,2) (2,1) (2,3)
+    //   white liberties: (1,4) (3,4) (2,5) (2,3)
+    // One shared point: a zone core.
+    b.set(2, 2, 1);
+    b.set(2, 4, 2);
+    i32[169] grid = flatten(b);
+    GroupManager gm = new GroupManager();
+    gm.build_from_grid(grid);
+
+    FightBuilder fb = new FightBuilder();
+    FightGroupManager fgm = fb.build(gm, grid);
+
+    i32 zones = fgm.fight_group_count;
+    check(zones == 1, "one zone from the shared liberty");
+    if (zones == 1) {
+        FightGroup fg = fgm.fight_groups[0];
+        i32 shared = fg.shared_lib_count;
+        i32 cells = fg.zone_count;
+        i32 zc = fg.color;
+        check(shared == 1, "exactly one shared liberty point");
+        check(zc == 0, "the zone is contested");
+        // Two stones plus a one-step ring: the footprint must exceed the
+        // two stone positions.
+        check(cells > 2, "zone footprint grows beyond the stones");
+    }
+}
+
+void test_far_apart_stones() {
+    println!("Test 3: stones with no shared liberty form no zone");
+    Board b = new Board();
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            b.set(x, y, 0);
+        }
+    }
+    b.set(0, 0, 1);
+    b.set(12, 12, 2);
+    i32[169] grid = flatten(b);
+
+    GroupManager gm = new GroupManager();
+    gm.build_from_grid(grid);
+    check(gm.group_count == 2, "two isolated groups on the board");
+
+    FightBuilder fb = new FightBuilder();
+    FightGroupManager fgm = fb.build(gm, grid);
+    // No shared liberty anywhere, so by the owner rule there is no hot
+    // zone. A zone is a contest, not merely two stones on one board.
+    i32 zones = fgm.fight_group_count;
+    check(zones == 0, "no shared liberty means no zone");
+}
+
+void test_shared_liberty_chain() {
+    println!("Test 4: chained shared liberties merge into one zone");
+    Board b = new Board();
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            b.set(x, y, 0);
+        }
+    }
+    // Three stones in a column, alternating colours:
+    //   black (4,2), white (4,4), black (4,6)
+    // black(4,2) and white(4,4) share (4,3); white(4,4) and black(4,6)
+    // share (4,5). Transitivity must fold all three into ONE zone.
+    b.set(4, 2, 1);
+    b.set(4, 4, 2);
+    b.set(4, 6, 1);
+    i32[169] grid = flatten(b);
+    GroupManager gm = new GroupManager();
+    gm.build_from_grid(grid);
+    check(gm.group_count == 3, "three groups on the board");
+
+    FightBuilder fb = new FightBuilder();
+    FightGroupManager fgm = fb.build(gm, grid);
+
+    i32 zones = fgm.fight_group_count;
+    check(zones == 1, "transitivity folds all three into one zone");
+    if (zones == 1) {
+        FightGroup fg = fgm.fight_groups[0];
+        i32 members = fg.group_count;
+        i32 shared = fg.shared_lib_count;
+        i32 zc = fg.color;
+        check(members == 3, "the zone holds all three groups");
+        String msg = "two shared points";
+        check(shared == 2, msg);
+        check(zc == 0, "the zone is contested");
+    }
+}
+
+void main() {
+    println!("=== Fight zone tests (Phase 4.3) ===");
+    test_opening_has_no_zone();
+    test_shared_liberty_zone();
+    test_far_apart_stones();
+    test_shared_liberty_chain();
+    println!("=== done ===");
+}

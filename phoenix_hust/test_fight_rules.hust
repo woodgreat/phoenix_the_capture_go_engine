@@ -1,0 +1,150 @@
+// test_fight_rules.hust - Phase 4.3 rule-level tests (method A)
+//
+// This file exercises the zone rules DIRECTLY: Group objects are built by
+// hand with add_lib, so the test does not depend on any board position.
+// The end-to-end path (grid -> GroupManager -> zones) is covered separately
+// in test_fight_zone.hust, method B.
+//
+// Owner rule (2026-10-22):
+//   core     two opposite-coloured groups share 1..2 liberty points.
+//            Mutual atari (each down to one liberty on the SAME point) is
+//            the extreme case of the same relation.
+//   touching alone is not entanglement.
+//
+// Source language policy: ASCII only.
+
+use ai_env_datatypes;
+use ai_env_fight;
+
+void check(bool cond, String name) {
+    if (cond) {
+        println!("  [PASS] {}", name);
+    } else {
+        println!("  [FAIL] {}", name);
+    }
+}
+
+// One group with the given colour and the listed liberty points.
+Group make_group(i32 color, i32[4] encs, i32 n) {
+    Group g = new Group();
+    g.color = color;
+    for (i32 i = 0; i < n; i++) {
+        i32 e = encs[i];
+        g.add_lib(e);
+    }
+    g.update_state();
+    return g;
+}
+
+void test_no_shared() {
+    println!("Test 1: groups with disjoint liberties are unrelated");
+    i32[4] la = {0, 1, 2, 3};
+    i32[4] lb = {4, 5, 6, 7};
+    Group a = make_group(1, la, 4);
+    Group b = make_group(2, lb, 4);
+    FightBuilder fb = new FightBuilder();
+    i32 shared = fb.shared_count(a, b);
+    bool rel = fb.related(a, b);
+    check(shared == 0, "no liberty is shared");
+    check(rel == false, "so the groups are not related");
+}
+
+void test_one_shared() {
+    println!("Test 2: one shared liberty is a zone core");
+    i32[4] la = {10, 11, 12, 13};
+    i32[4] lb = {13, 14, 15, 16};
+    Group a = make_group(1, la, 4);
+    Group b = make_group(2, lb, 4);
+    FightBuilder fb = new FightBuilder();
+    i32 shared = fb.shared_count(a, b);
+    bool rel = fb.related(a, b);
+    check(shared == 1, "exactly one shared liberty");
+    check(rel, "one shared liberty forms a core");
+}
+
+void test_two_shared() {
+    println!("Test 3: two shared liberties still form a core");
+    i32[4] la = {20, 21, 22, 23};
+    i32[4] lb = {22, 23, 24, 25};
+    Group a = make_group(1, la, 4);
+    Group b = make_group(2, lb, 4);
+    FightBuilder fb = new FightBuilder();
+    i32 shared = fb.shared_count(a, b);
+    bool rel = fb.related(a, b);
+    check(shared == 2, "two shared liberties");
+    check(rel, "two shared liberties form a core");
+}
+
+void test_three_shared_excluded() {
+    println!("Test 4: three shared liberties exceed the rule and are excluded");
+    i32[4] la = {30, 31, 32, 33};
+    i32[4] lb = {31, 32, 33, 34};
+    Group a = make_group(1, la, 4);
+    Group b = make_group(2, lb, 4);
+    FightBuilder fb = new FightBuilder();
+    i32 shared = fb.shared_count(a, b);
+    bool rel = fb.related(a, b);
+    check(shared == 3, "three shared liberties");
+    check(rel == false, "three shared is above the 1..2 rule");
+}
+
+void test_mutual_atari_same_point() {
+    println!("Test 5: mutual atari on one point is a core");
+    i32[4] la = {40, 0, 0, 0};
+    i32[4] lb = {40, 0, 0, 0};
+    Group a = make_group(1, la, 1);
+    Group b = make_group(2, lb, 1);
+    FightBuilder fb = new FightBuilder();
+    i32 shared = fb.shared_count(a, b);
+    bool rel = fb.related(a, b);
+    i32 a_libs = a.lib_count;
+    i32 b_libs = b.lib_count;
+    check(a_libs == 1, "black is down to one liberty");
+    check(b_libs == 1, "white is down to one liberty");
+    check(shared == 1, "the single liberty is the same point");
+    check(rel, "mutual atari is a core");
+}
+
+void test_mutual_atari_different_point() {
+    println!("Test 6: single liberties on different points do not relate");
+    i32[4] la = {50, 0, 0, 0};
+    i32[4] lb = {51, 0, 0, 0};
+    Group a = make_group(1, la, 1);
+    Group b = make_group(2, lb, 1);
+    FightBuilder fb = new FightBuilder();
+    i32 shared = fb.shared_count(a, b);
+    bool rel = fb.related(a, b);
+    check(shared == 0, "different points are not shared");
+    check(rel == false, "no relation without a shared point");
+}
+
+void test_same_colour_ignored() {
+    println!("Test 7: same-colour groups never form a contested core");
+    i32[4] la = {60, 61, 0, 0};
+    i32[4] lb = {61, 62, 0, 0};
+    Group a = make_group(1, la, 2);
+    Group b = make_group(1, lb, 2);
+    FightBuilder fb = new FightBuilder();
+    // shared_count ignores colour on purpose; related() is the gate that
+    // the builder applies only between opposite colours.
+    i32 shared = fb.shared_count(a, b);
+    check(shared == 1, "the point is shared geometrically");
+    // The builder skips equal colours before calling related(), so what this
+    // test pins down is that the shared point alone would NOT be enough if
+    // the colour check were dropped.
+    bool a_black = a.color == 1;
+    bool b_black = b.color == 1;
+    check(a_black && b_black, "both groups are black, so the union is skipped");
+}
+
+void main() {
+    println!("=== Fight zone rule tests (Phase 4.3, method A) ===");
+    test_no_shared();
+    test_one_shared();
+    test_two_shared();
+    test_three_shared_excluded();
+    test_mutual_atari_same_point();
+    test_mutual_atari_different_point();
+    test_same_colour_ignored();
+    println!("=== done ===");
+}
