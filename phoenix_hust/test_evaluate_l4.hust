@@ -1,0 +1,107 @@
+// test_evaluate_l4.hust - Phase 4.4 non-linear liberty penalty
+//
+// L4 principle: one liberty is far more urgent than two, and two more than
+// three. The weight steps are steep (LIB_ATARI >> LIB_DANGER >> LIB_WARN),
+// not linear.
+//
+// Positions are built with place_raw, which only checks occupancy and range
+// and keeps the mandated twist-cross opening intact.
+//
+// Source language policy: ASCII only.
+
+use board;
+use ai_env_evaluate;
+
+void check(bool cond, String name) {
+    if (cond) {
+        println!("  [PASS] {}", name);
+    } else {
+        println!("  [FAIL] {}", name);
+    }
+}
+
+// Sum of L4 weights for one colour on the opening board.
+i32 risk_of(Board b, i32 color) {
+    Evaluate ev = new Evaluate();
+    return ev.liberty_risk(b, color);
+}
+
+void test_weight_table() {
+    println!("Test 1: liberty weight table is non-linear");
+    Evaluate ev = new Evaluate();
+    i32 w1 = ev.liberty_weight(1);
+    i32 w2 = ev.liberty_weight(2);
+    i32 w3 = ev.liberty_weight(3);
+    i32 w4 = ev.liberty_weight(4);
+    i32 w9 = ev.liberty_weight(9);
+
+    check(w1 == 12000, "1 liberty weighs 12000");
+    check(w2 == 3000, "2 liberties weigh 3000");
+    check(w3 == 600, "3 liberties weigh 600");
+    check(w4 == 0, "4 liberties weigh 0");
+    check(w9 == 0, "9 liberties weigh 0");
+    // Non-linearity: the 1 -> 2 step must dominate the 2 -> 3 step.
+    check(w1 - w2 > w2 - w3, "1->2 step is steeper than 2->3");
+    check(w1 == w2 * 4, "atari is exactly 4x the 2-liberty weight");
+}
+
+void test_opening_risk() {
+    println!("Test 2: opening board - four groups, two liberties each");
+    Board b = new Board();
+    // Every opening group has 2 liberties, so each side carries 2 * 3000.
+    // Bind the calls first: a nested call inside check() passes a
+    // temporary that does not outlive the argument list.
+    i32 black_risk = risk_of(b, 1);
+    i32 white_risk = risk_of(b, 2);
+    check(black_risk == 6000, "black opening risk is 2 groups at 3000");
+    check(white_risk == 6000, "white opening risk is 2 groups at 3000");
+    check(black_risk == white_risk, "opening position is symmetric");
+}
+
+void test_atari_spike() {
+    println!("Test 3: filling one liberty spikes the risk");
+    Board b = new Board();
+    i32 before = risk_of(b, 1);
+
+    // Black at (6,6) had liberties (6,5) and (5,6). White occupies (6,5),
+    // so the black stone is left with a single liberty at (5,6).
+    b.place_raw(6, 5, 2);
+    i32 after = risk_of(b, 1);
+
+    check(after > before, "risk rises once black is in atari");
+    // The atari stone contributes 12000 instead of 3000: +9000.
+    check(after - before == 9000, "atari adds exactly 9000 over two liberties");
+}
+
+void test_opponent_atari_helps() {
+    println!("Test 4: the opponent being in atari helps my score");
+    Board b = new Board();
+    Evaluate ev = new Evaluate();
+    i32 before = ev.evaluate(b, 1);
+
+    // White at (7,6) loses one of its two liberties when black fills (7,5).
+    b.place_raw(7, 5, 1);
+    i32 after = ev.evaluate(b, 1);
+
+    check(after > before, "black score rises when white is in atari");
+}
+
+void test_three_liberties() {
+    println!("Test 5: three liberties carry a small weight, not zero");
+    Board b = new Board();
+    Evaluate ev = new Evaluate();
+    i32 w3 = ev.liberty_weight(3);
+    i32 w1 = ev.liberty_weight(1);
+    check(w3 > 0, "three liberties still matter");
+    check(w3 * 10 < w1, "but far less than atari");
+}
+
+void main() {
+    println!("=== Evaluate L4 tests (Phase 4.4) ===");
+    test_weight_table();
+    test_opening_risk();
+    test_atari_spike();
+    test_opponent_atari_helps();
+    test_three_liberties();
+    println!("=== done ===");
+}
