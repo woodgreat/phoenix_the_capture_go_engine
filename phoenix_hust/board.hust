@@ -502,6 +502,7 @@ public class Board {
     // Stones removed during search are absent from the grid, so the
     // stone diff already reflects captures made inside the search.
     public i32 evaluate_for(i32 ai_color) {
+        debug_log_i32(3, "EVAL", "ai_color", ai_color);
         i32 opp = this.opponent(ai_color);
         i32 my_stones = 0;
         i32 opp_stones = 0;
@@ -573,6 +574,7 @@ public class Board {
                 }
             }
         }
+        debug_log_i32(3, "EVAL", "score", score);
         return score;
     }
 
@@ -615,7 +617,15 @@ public class Board {
         i32 alpha = alpha_in;
         i32 beta = beta_in;
         this.search_nodes = this.search_nodes + 1;
+        debug_log_i32(2, "MM", "depth", depth);
+        debug_log_i32(2, "MM", "color_to_move", color_to_move);
+        debug_log_i32(2, "MM", "search_nodes", this.search_nodes);
         if (depth == 0 || this.search_nodes > this.search_budget) {
+            if (this.search_nodes > this.search_budget) {
+                debug_log(2, "MM", "prune budget");
+            } else {
+                debug_log(2, "MM", "prune depth");
+            }
             return this.evaluate_for(ai_color);
         }
 

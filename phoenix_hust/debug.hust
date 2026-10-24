@@ -1,0 +1,30 @@
+// debug.hust - structured logging for Phoenix engine
+// No global state; control via compile-time flag or pass bool around.
+// For now: hardcode DEBUG_ON to enable/disable.
+
+bool DEBUG_ON = true;
+i32 DEBUG_LEVEL = 1;
+
+public void debug_log(i32 level, &str tag, &str msg) {
+    if (DEBUG_ON && DEBUG_LEVEL >= level) {
+        println!("[{}] {}", tag, msg);
+    }
+}
+
+public void debug_log_i32(i32 level, &str tag, &str key, i32 val) {
+    if (DEBUG_ON && DEBUG_LEVEL >= level) {
+        println!("[{}] {}={}", tag, key, val);
+    }
+}
+
+public void debug_log_i32_2(i32 level, &str tag, &str k1, i32 v1, &str k2, i32 v2) {
+    if (DEBUG_ON && DEBUG_LEVEL >= level) {
+        println!("[{}] {}={} {}={}", tag, k1, v1, k2, v2);
+    }
+}
+
+public void debug_log_i32_3(i32 level, &str tag, &str k1, i32 v1, &str k2, i32 v2, &str k3, i32 v3) {
+    if (DEBUG_ON && DEBUG_LEVEL >= level) {
+        println!("[{}] {}={} {}={} {}={}", tag, k1, v1, k2, v2, k3, v3);
+    }
+}

@@ -27,6 +27,7 @@
 // to build the GTP response.
 
 use board;
+use debug;
 
 interface MoveGenerator {
     public newBoard genmove(board, color);
@@ -51,7 +52,8 @@ public class Level1 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;   // rebind: params immutable, locals are mut
+        Board b2 = board;
+        debug_log_i32(1, "L1", "genmove color", color);   // rebind: params immutable, locals are mut
         i32 opp = b2.opponent(color);
         i32[169] capture_moves = {0};
         i32 n_cap = 0;
@@ -153,30 +155,40 @@ public class AIWrapper {
             Board result = ai.genmove(board, color);
             this.last_x = ai.last_x();
             this.last_y = ai.last_y();
+            debug_log_i32(1, "AI", "last_x", this.last_x);
+            debug_log_i32(1, "AI", "last_y", this.last_y);
             return result;
         } else if (this.level <= 3) {
             Level3 ai = new Level3();
             Board result = ai.genmove(board, color);
             this.last_x = ai.last_x();
             this.last_y = ai.last_y();
+            debug_log_i32(1, "AI", "last_x", this.last_x);
+            debug_log_i32(1, "AI", "last_y", this.last_y);
             return result;
         } else if (this.level <= 5) {
             Level5 ai = new Level5();
             Board result = ai.genmove(board, color);
             this.last_x = ai.last_x();
             this.last_y = ai.last_y();
+            debug_log_i32(1, "AI", "last_x", this.last_x);
+            debug_log_i32(1, "AI", "last_y", this.last_y);
             return result;
         } else if (this.level <= 7) {
             Level7 ai = new Level7();
             Board result = ai.genmove(board, color);
             this.last_x = ai.last_x();
             this.last_y = ai.last_y();
+            debug_log_i32(1, "AI", "last_x", this.last_x);
+            debug_log_i32(1, "AI", "last_y", this.last_y);
             return result;
         } else {
             Level10 ai = new Level10();
             Board result = ai.genmove(board, color);
             this.last_x = ai.last_x();
             this.last_y = ai.last_y();
+            debug_log_i32(1, "AI", "last_x", this.last_x);
+            debug_log_i32(1, "AI", "last_y", this.last_y);
             return result;
         }
     }
@@ -219,6 +231,7 @@ public class Level3 implements MoveGenerator {
 
     public Board genmove(Board board, i32 color) {
         Board b2 = board;
+        debug_log_i32(1, "L3", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32 best_enc = -1;
         i32 best_score = -1000000;
@@ -341,6 +354,7 @@ public class Level5 implements MoveGenerator {
 
     public Board genmove(Board board, i32 color) {
         Board b2 = board;
+        debug_log_i32(1, "L5", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32 best_enc = -1;
         i32 best_val = -999999;
@@ -429,6 +443,7 @@ public class Level7 implements MoveGenerator {
 
     public Board genmove(Board board, i32 color) {
         Board b2 = board;
+        debug_log_i32(1, "L7", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
@@ -522,6 +537,7 @@ public class Level10 implements MoveGenerator {
 
     public Board genmove(Board board, i32 color) {
         Board b2 = board;
+        debug_log_i32(1, "L10", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};

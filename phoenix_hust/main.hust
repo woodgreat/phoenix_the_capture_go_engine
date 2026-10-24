@@ -20,6 +20,7 @@
 use board;
 use gtp;
 use ai;
+use debug;
 use ai_env_datatypes;
 
 void main() {
@@ -552,7 +553,26 @@ void main() {
                     println!("={}pass", p);
                 }
             }
-        } else {
+                } else if (cmd == "debug") {
+            // debug on | debug off | debug level <N>
+            if (a1 == "on") {
+                
+                println!("={}", p);
+            } else if (a1 == "off") {
+                
+                println!("={}", p);
+            } else if (a1 == "level") {
+                i32 lv = str_to_i32(a2.clone());
+                if (lv >= 0 && lv <= 3) {
+                    
+                    println!("={}", p);
+                } else {
+                    println!("?{}unacceptable level", p);
+                }
+            } else {
+                println!("?{}unknown debug command", p);
+            }
+} else {
             println!("?{}unknown command", p);
         }
 
