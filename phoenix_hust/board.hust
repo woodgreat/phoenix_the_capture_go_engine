@@ -497,10 +497,110 @@ public class Board {
         this.tt_beta[store_slot as usize] = beta_in;
     }
 
+    // Liberty weight for group value: 1 liberty = dying, 2 = danger, 3+ = safe
+    public f32 liberty_weight(i32 libs) {
+        if (libs <= 1) {
+            return 0.3;
+        }
+        if (libs == 2) {
+            return 0.7;
+        }
+        if (libs == 3) {
+            return 1.0;
+        }
+        return 1.2;
+    }
+
+    // Analyze all groups on board. Returns via out-params (Hust workaround):
+    //   my_total_value, opp_total_value: sum of size * liberty_weight
+    //   my_atari_count, opp_atari_count: number of groups in atari (1 liberty)
+    //   my_atari_max_size, opp_atari_max_size: largest atari group size
+    public void analyze_groups(i32 ai_color, i32 my_total_value, i32 opp_total_value,
+                               i32 my_atari_count, i32 opp_atari_count,
+                               i32 my_atari_max_size, i32 opp_atari_max_size) {
+        i32 opp = this.opponent(ai_color);
+        i32[13][13] visited = {0};
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+
+        my_total_value = 0;
+        opp_total_value = 0;
+        my_atari_count = 0;
+        opp_atari_count = 0;
+        my_atari_max_size = 0;
+        opp_atari_max_size = 0;
+
+        for (i32 x = 0; x < BOARD_SIZE; x++) {
+            for (i32 y = 0; y < BOARD_SIZE; y++) {
+                i32 c = this.grid[x][y];
+                if (c == 0 || visited[x][y] == 1) {
+                    continue;
+                }
+
+                // BFS flood fill to find group
+                i32[] qx;
+                i32[] qy;
+                qx.push(x);
+                qy.push(y);
+                visited[x][y] = 1;
+                i32 head = 0;
+                i32 size = 0;
+                i32 libs = 0;
+                i32[13][13] lib_seen = {0};
+
+                while (head < (i32)qx.len()) {
+                    i32 cx = qx[head];
+                    i32 cy = qy[head];
+                    head = head + 1;
+                    size = size + 1;
+
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = cx + dxs[d];
+                        i32 ny = cy + dys[d];
+                        if (this.is_valid(nx, ny)) {
+                            if (this.grid[nx][ny] == 0) {
+                                if (lib_seen[nx][ny] == 0) {
+                                    lib_seen[nx][ny] = 1;
+                                    libs = libs + 1;
+                                }
+                            } else if (this.grid[nx][ny] == c && visited[nx][ny] == 0) {
+                                visited[nx][ny] = 1;
+                                qx.push(nx);
+                                qy.push(ny);
+                            }
+                        }
+                    }
+                }
+
+                // Calculate group value
+                f32 w = this.liberty_weight(libs);
+                i32 value = size * (i32)(w * 100.0);
+
+                if (c == ai_color) {
+                    my_total_value = my_total_value + value;
+                    if (libs == 1) {
+                        my_atari_count = my_atari_count + 1;
+                        if (size > my_atari_max_size) {
+                            my_atari_max_size = size;
+                        }
+                    }
+                } else if (c == opp) {
+                    opp_total_value = opp_total_value + value;
+                    if (libs == 1) {
+                        opp_atari_count = opp_atari_count + 1;
+                        if (size > opp_atari_max_size) {
+                            opp_atari_max_size = size;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Static evaluation from ai_color's perspective:
-    //   stone diff * 10 + liberty attribution diff * 4 + counter diff * 100
-    // Stones removed during search are absent from the grid, so the
-    // stone diff already reflects captures made inside the search.
+    //   stone diff + liberty diff + capture diff + eye potential + connection
+    //   + group value (size-weighted by liberty count)
+    //   + tactical adjustment (atari detection and exchange evaluation)
     public i32 evaluate_for(i32 ai_color) {
         debug_log_i32(3, "EVAL", "ai_color", ai_color);
         i32 opp = this.opponent(ai_color);
@@ -543,11 +643,43 @@ public class Board {
         } else {
             cap_diff = this.white_captures - this.black_captures;
         }
-        // capture is the victory currency: stone diff dominates
         i32 eye = this.count_eye_potential(ai_color) - this.count_eye_potential(opp);
         i32 conn = this.count_connection_strength(ai_color) - this.count_connection_strength(opp);
+
+        // Group analysis for tactical evaluation
+        i32 my_gval = 0;
+        i32 opp_gval = 0;
+        i32 my_atari_cnt = 0;
+        i32 opp_atari_cnt = 0;
+        i32 my_atari_max = 0;
+        i32 opp_atari_max = 0;
+        this.analyze_groups(ai_color, my_gval, opp_gval, my_atari_cnt, opp_atari_cnt, my_atari_max, opp_atari_max);
+
+        // Tactical adjustment:
+        // - Own group in atari: penalty proportional to size (but not absolute - may trade)
+        // - Opponent group in atari: bonus proportional to size (capture opportunity)
+        // - Exchange: if both sides have atari, prefer capturing larger group
+        i32 tactical = 0;
+
+        // Own atari penalty: size * 50 (large groups hurt more when dying)
+        // Reduced if we also have opponent in atari (possible trade)
+        if (my_atari_cnt > 0) {
+            i32 penalty = my_atari_max * 50;
+            if (opp_atari_cnt > 0) {
+                // Possible trade: reduce penalty
+                penalty = penalty / 2;
+            }
+            tactical = tactical - penalty;
+        }
+
+        // Opponent atari bonus: size * 60 (slightly higher than penalty to encourage attack)
+        if (opp_atari_cnt > 0) {
+            tactical = tactical + opp_atari_max * 60;
+        }
+
         return (my_stones - opp_stones) * 100 + (my_libs - opp_libs) * 8
-             + cap_diff * 100 + eye * 50 + conn * 30;
+             + cap_diff * 100 + eye * 50 + conn * 30
+             + (my_gval - opp_gval) / 10 + tactical;
     }
 
     // Eye potential for color: count points that could become eyes.
