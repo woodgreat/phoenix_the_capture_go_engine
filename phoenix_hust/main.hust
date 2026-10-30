@@ -32,7 +32,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.2.1.20261030190000");
+        println!("phoenix 0.2.2.20261030195200");
         return;
     }
     if (arg1 == "--help") {
@@ -149,6 +149,8 @@ void main() {
             a1 = "captures";
         } else if (cmd == "rw") {
             cmd = "result";
+        } else if (cmd == "pm") {
+            cmd = "print_moves";
         } else if (cmd == "gb") {
             cmd = "genmove";
             a1 = "black";
@@ -192,7 +194,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("={}0.2.1.20261030190000", p);
+            println!("={}0.2.2.20261030195200", p);
         } else if (cmd == "known_command") {
             String k = "false";
             if (a1 == "protocol_version" || a1 == "name" || a1 == "version"
@@ -208,7 +210,8 @@ void main() {
                 || a1 == "wood_rules" || a1 == "wood_ai_level"
                 || a1 == "set" || a1 == "result" || a1 == "rw"
                 || a1 == "ucb" || a1 == "use_clean_board"
-                || a1 == "usb" || a1 == "use_set_board") {
+                || a1 == "usb" || a1 == "use_set_board"
+                || a1 == "pm" || a1 == "print_moves") {
                 k = "true";
             }
             println!("={}{}", p, k);
@@ -251,6 +254,8 @@ void main() {
             println!("undo");
             println!("fixed_handicap");
             println!("move_history");
+            println!("pm");
+            println!("print_moves");
             println!("export_sgf");
         } else if (cmd == "boardsize") {
             i32 n = str_to_i32(a1.clone());
@@ -462,22 +467,30 @@ void main() {
             }
         } else if (cmd == "wood_rules") {
             println!("={}Wood Capture Go Rules v1.0 (2026-09-13)", p);
-        } else if (cmd == "move_history") {
+        } else if (cmd == "move_history" || cmd == "pm" || cmd == "print_moves") {
             // Display move history in simple text format
             // Format: move_number: color x,y captured_count
-            println!("={}Move history ({} moves):", p, move_count);
-            for (i32 i = 0; i < move_count; i++) {
-                i32 base = i * 4;
-                i32 mc = move_history[base];
-                i32 mx = move_history[base + 1];
-                i32 my = move_history[base + 2];
-                i32 cap = move_history[base + 3];
-                String color_str = "B";
-                if (mc != 1) {
-                    color_str = "W";
+            if (move_count == 0) {
+                println!("={}No moves yet.", p);
+            } else {
+                println!("={}Move history ({} moves):", p, move_count);
+                for (i32 i = 0; i < move_count; i++) {
+                    i32 base = i * 4;
+                    i32 mc = move_history[base];
+                    i32 mx = move_history[base + 1];
+                    i32 my = move_history[base + 2];
+                    i32 cap = move_history[base + 3];
+                    String color_str = "B";
+                    if (mc != 1) {
+                        color_str = "W";
+                    }
+                    String coord = xy_to_gtp(mx, my);
+                    if (cap > 0) {
+                        println!("{}: {} {} cap={}", i + 1, color_str, coord, cap);
+                    } else {
+                        println!("{}: {} {}", i + 1, color_str, coord);
+                    }
                 }
-                String coord = xy_to_gtp(mx, my);
-                println!("{}: {} {} cap={}", i + 1, color_str, coord, cap);
             }
         } else if (cmd == "export_sgf") {
             // Export game in SGF format (prepared for future file export)
