@@ -663,6 +663,112 @@ public class Level5 implements MoveGenerator {
         i32 best_val = -999999;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
+        
+        // Atari rescue: check if our group is in atari and find rescue moves
+        i32[6] gres = b2.analyze_groups(color);
+        i32 my_gval = gres[0];
+        i32 opp_gval = gres[1];
+        i32 my_atari_cnt = gres[2];
+        i32 opp_atari_cnt = gres[3];
+        i32 my_atari_max = gres[4];
+        i32 opp_atari_max = gres[5];
+        
+        if (my_atari_cnt > 0) {
+            debug_log_i32(1, "L5", "atari detected, max_size", my_atari_max);
+            // Try to find rescue moves for atari groups
+            // A rescue move either: captures the attacking stones, or extends liberties
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        // Check if this move rescues an atari group
+                        bool is_rescue = false;
+                        // Try placing here and see if any atari group gains liberties
+                        i32[13][13] snap = {0};
+                        for (i32 i = 0; i < 13; i++) {
+                            for (i32 j = 0; j < 13; j++) {
+                                snap[i][j] = b2.get(i, j);
+                            }
+                        }
+                        b2.set(x, y, color);
+                        // Check if any neighboring friendly group was in atari and now has >1 liberty
+                        for (i32 d = 0; d < 4; d++) {
+                            i32 nx = x + dxs[d];
+                            i32 ny = y + dys[d];
+                            if (b2.is_valid(nx, ny) && b2.get(nx, ny) == color) {
+                                i32 libs = b2.count_liberties(nx, ny);
+                                if (libs > 1) {
+                                    // This group might have been in atari
+                                    // Check if it was in atari before by checking snapshot
+                                    // Simple heuristic: if this group is connected to our stones and now has >1 lib
+                                    is_rescue = true;
+                                }
+                            }
+                        }
+                        // Also check if this captures enemy stones that were attacking
+                        i32 cap = 0;
+                        for (i32 d = 0; d < 4; d++) {
+                            i32 nx = x + dxs[d];
+                            i32 ny = y + dys[d];
+                            if (b2.is_valid(nx, ny) && b2.get(nx, ny) == opp) {
+                                if (b2.count_liberties(nx, ny) == 0) {
+                                    cap = cap + b2.remove_group(nx, ny);
+                                    is_rescue = true;
+                                }
+                            }
+                        }
+                        // Restore
+                        for (i32 i = 0; i < 13; i++) {
+                            for (i32 j = 0; j < 13; j++) {
+                                b2.set(i, j, snap[i][j]);
+                            }
+                        }
+                        
+                        if (is_rescue) {
+                            debug_log_i32_2(1, "L5", "rescue_x", x, "rescue_y", y);
+                            // Evaluate this rescue move with minimax
+                            b2.set(x, y, color);
+                            for (i32 d = 0; d < 4; d++) {
+                                i32 nx = x + dxs[d];
+                                i32 ny = y + dys[d];
+                                if (b2.is_valid(nx, ny) && b2.get(nx, ny) == opp) {
+                                    if (b2.count_liberties(nx, ny) == 0) {
+                                        b2.remove_group(nx, ny);
+                                    }
+                                }
+                            }
+                            i32 val = b2.minimax(2, opp, color, -999999, 999999);
+                            for (i32 i = 0; i < 13; i++) {
+                                for (i32 j = 0; j < 13; j++) {
+                                    b2.set(i, j, snap[i][j]);
+                                }
+                            }
+                            debug_log_i32(1, "L5", "rescue_val", val);
+                            if (val > best_val) {
+                                best_val = val;
+                                best_enc = x * 13 + y;
+                            }
+                        }
+                    }
+                }
+            }
+            // If we found a rescue move, use it
+            if (best_enc >= 0) {
+                debug_log_i32(1, "L5", "using rescue move", best_enc);
+                i32 mx = best_enc / 13;
+                i32 my = best_enc - mx * 13;
+                i32 r = b2.place_stone(mx, my, color);
+                if (r >= 0) {
+                    this.last_x = mx;
+                    this.last_y = my;
+                } else {
+                    this.last_x = -1;
+                    this.last_y = -1;
+                }
+                return b2;
+            }
+        }
+        
+        // Normal search if no atari rescue found
         for (i32 x = 0; x < 13; x++) {
             for (i32 y = 0; y < 13; y++) {
                 if (b2.get(x, y) == 0) {

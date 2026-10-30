@@ -65,6 +65,7 @@ public class Board {
     // (2026-10-10) A2 fix: ctor now supports full statements, so
     // setup_twist_cross() is called directly instead of requiring the
     // caller to invoke it after `new Board()`.
+    // (2026-10-30) Add parameter to control twist-cross setup for debugging.
     public Board() {
         this.black_captures = 0;
         this.white_captures = 0;
@@ -74,9 +75,13 @@ public class Board {
         this.rng_seed = 88675123;
         this.search_nodes = 0;
         this.search_budget = 300000;
-        this.setup_twist_cross();
         // Initialize TT arrays (2026-10-10)
         this.init_search_tables();
+    }
+    
+    // Setup twist-cross opening (called separately or by clear())
+    public void setup_opening() {
+        this.setup_twist_cross();
     }
 
     // Initialize transposition table and Zobrist hashing tables.
@@ -105,7 +110,7 @@ public class Board {
         }
     }
 
-    // Reset board to the mandatory twist-cross opening position
+    // Reset board to empty (no twist-cross). Use setup_opening() to add twist-cross.
     public void clear() {
         this.black_captures = 0;
         this.white_captures = 0;
@@ -117,6 +122,11 @@ public class Board {
                 this.grid[i][j] = 0;
             }
         }
+    }
+    
+    // Reset board and setup twist-cross opening (convenience method)
+    public void clear_with_opening() {
+        this.clear();
         this.setup_twist_cross();
     }
 
@@ -233,7 +243,7 @@ public class Board {
         i32 count = 1;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-        while (head < (i32)qx.len()) {
+        while (head < qx.len() as i32) {
             i32 cx = qx[head];
             i32 cy = qy[head];
             head = head + 1;
@@ -515,20 +525,16 @@ public class Board {
     //   my_total_value, opp_total_value: sum of size * liberty_weight
     //   my_atari_count, opp_atari_count: number of groups in atari (1 liberty)
     //   my_atari_max_size, opp_atari_max_size: largest atari group size
-    public void analyze_groups(i32 ai_color, i32 my_total_value, i32 opp_total_value,
-                               i32 my_atari_count, i32 opp_atari_count,
-                               i32 my_atari_max_size, i32 opp_atari_max_size) {
+    // Analyze all groups on board. Returns i32[6] array:
+    //   [0] = my_total_value, [1] = opp_total_value
+    //   [2] = my_atari_count, [3] = opp_atari_count
+    //   [4] = my_atari_max_size, [5] = opp_atari_max_size
+    public i32[6] analyze_groups(i32 ai_color) {
+        i32[6] result = {0, 0, 0, 0, 0, 0};
         i32 opp = this.opponent(ai_color);
         i32[13][13] visited = {0};
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
-
-        my_total_value = 0;
-        opp_total_value = 0;
-        my_atari_count = 0;
-        opp_atari_count = 0;
-        my_atari_max_size = 0;
-        opp_atari_max_size = 0;
 
         for (i32 x = 0; x < BOARD_SIZE; x++) {
             for (i32 y = 0; y < BOARD_SIZE; y++) {
@@ -548,7 +554,7 @@ public class Board {
                 i32 libs = 0;
                 i32[13][13] lib_seen = {0};
 
-                while (head < (i32)qx.len()) {
+                while (head < qx.len() as i32) {
                     i32 cx = qx[head];
                     i32 cy = qy[head];
                     head = head + 1;
@@ -574,27 +580,28 @@ public class Board {
 
                 // Calculate group value
                 f32 w = this.liberty_weight(libs);
-                i32 value = size * (i32)(w * 100.0);
+                i32 value = size * (w * 100.0) as i32;
 
                 if (c == ai_color) {
-                    my_total_value = my_total_value + value;
+                    result[0] = result[0] + value;
                     if (libs == 1) {
-                        my_atari_count = my_atari_count + 1;
-                        if (size > my_atari_max_size) {
-                            my_atari_max_size = size;
+                        result[2] = result[2] + 1;
+                        if (size > result[4]) {
+                            result[4] = size;
                         }
                     }
                 } else if (c == opp) {
-                    opp_total_value = opp_total_value + value;
+                    result[1] = result[1] + value;
                     if (libs == 1) {
-                        opp_atari_count = opp_atari_count + 1;
-                        if (size > opp_atari_max_size) {
-                            opp_atari_max_size = size;
+                        result[3] = result[3] + 1;
+                        if (size > result[5]) {
+                            result[5] = size;
                         }
                     }
                 }
             }
         }
+        return result;
     }
 
     // Static evaluation from ai_color's perspective:
@@ -647,13 +654,13 @@ public class Board {
         i32 conn = this.count_connection_strength(ai_color) - this.count_connection_strength(opp);
 
         // Group analysis for tactical evaluation
-        i32 my_gval = 0;
-        i32 opp_gval = 0;
-        i32 my_atari_cnt = 0;
-        i32 opp_atari_cnt = 0;
-        i32 my_atari_max = 0;
-        i32 opp_atari_max = 0;
-        this.analyze_groups(ai_color, my_gval, opp_gval, my_atari_cnt, opp_atari_cnt, my_atari_max, opp_atari_max);
+        i32[6] gres = this.analyze_groups(ai_color);
+        i32 my_gval = gres[0];
+        i32 opp_gval = gres[1];
+        i32 my_atari_cnt = gres[2];
+        i32 opp_atari_cnt = gres[3];
+        i32 my_atari_max = gres[4];
+        i32 opp_atari_max = gres[5];
 
         // Tactical adjustment:
         // - Own group in atari: penalty proportional to size (but not absolute - may trade)
@@ -661,10 +668,10 @@ public class Board {
         // - Exchange: if both sides have atari, prefer capturing larger group
         i32 tactical = 0;
 
-        // Own atari penalty: size * 50 (large groups hurt more when dying)
+        // Own atari penalty: size * 200 (large groups hurt more when dying)
         // Reduced if we also have opponent in atari (possible trade)
         if (my_atari_cnt > 0) {
-            i32 penalty = my_atari_max * 50;
+            i32 penalty = my_atari_max * 200;
             if (opp_atari_cnt > 0) {
                 // Possible trade: reduce penalty
                 penalty = penalty / 2;
