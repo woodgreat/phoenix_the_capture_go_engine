@@ -217,6 +217,41 @@ void main() {
                 k = "true";
             }
             println!("={}{}", p, k);
+        } else if (cmd == "help") {
+            // Print available commands
+            println!("={}Available commands:", p);
+            println!("");
+            println!("Board setup:");
+            println!("  ucb / use_clean_board  - use empty board");
+            println!("  usb / use_set_board    - use twist-cross opening");
+            println!("  clear_board / cb       - clear board");
+            println!("");
+            println!("Moves:");
+            println!("  play <color> <coord>   - play a stone (e.g. play black F7)");
+            println!("  pb <coord> / pw <coord> - play black/white");
+            println!("  genmove <color>       - AI move (genmove black)");
+            println!("  gb / gw                - AI move black/white");
+            println!("  undo                   - undo last move");
+            println!("");
+            println!("Display:");
+            println!("  showboard / sb         - show board");
+            println!("  show captures / sc     - show capture counts");
+            println!("  print_moves / pm       - print move history");
+            println!("  move_history           - alias for print_moves");
+            println!("");
+            println!("Game info:");
+            println!("  result / rw            - show game result");
+            println!("  board_status           - show board status");
+            println!("  wood_ai_level          - show/set AI level");
+            println!("  wood_captures          - show capture counts");
+            println!("  wood_rules             - show rules version");
+            println!("");
+            println!("Other:");
+            println!("  list_commands          - list all GTP commands");
+            println!("  known_command <cmd>    - check if command exists");
+            println!("  export_sgf             - export game as SGF");
+            println!("  quit / exit            - exit program");
+            println!("  help                   - show this help");
         } else if (cmd == "list_commands") {
             println!("={}protocol_version", p);
             println!("name");
