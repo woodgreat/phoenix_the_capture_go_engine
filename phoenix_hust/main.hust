@@ -42,6 +42,9 @@ void main() {
         println!("  --mode gtp   strict GTP protocol for GUIs");
         println!("  --show-board auto print board after each move (interactive only)");
         println!("  --level N    set AI level 1-10 at startup");
+        println!("");
+        println!("In-game help: type 'list_commands' to see all commands,");
+        println!("or 'known_command <cmd>' to check if a command exists.");
         return;
     }
     if (arg1 == "--mode" && arg2 == "gtp") {
@@ -60,10 +63,16 @@ void main() {
     }
 
     Board b = new Board();
-    // setup_twist_cross() is now called inside the ctor (A2 fix)
+    // Default: twist-cross opening (use 'ucb' for clean board)
+    b.setup_opening();
     if (!gtp_mode) {
         println!("wood_capture_go_engine_phoenix");
         std::io::Write::flush(&mut std::io::stdout());
+    }
+    
+    // --show-board: display initial board state
+    if (show_board_flag && !gtp_mode) {
+        b.print_board();
     }
 
     // Undo history stack: one snapshot per successful placement
@@ -129,6 +138,10 @@ void main() {
             cmd = "quit";
         } else if (cmd == "cb") {
             cmd = "clear_board";
+        } else if (cmd == "ucb") {
+            cmd = "use_clean_board";
+        } else if (cmd == "usb") {
+            cmd = "use_set_board";
         } else if (cmd == "sb") {
             cmd = "showboard";
         } else if (cmd == "sc") {
@@ -193,7 +206,9 @@ void main() {
                 || a1 == "wood_captures" || a1 == "sc" || a1 == "show"
                 || a1 == "wood_target" || a1 == "board_status"
                 || a1 == "wood_rules" || a1 == "wood_ai_level"
-                || a1 == "set" || a1 == "result" || a1 == "rw") {
+                || a1 == "set" || a1 == "result" || a1 == "rw"
+                || a1 == "ucb" || a1 == "use_clean_board"
+                || a1 == "usb" || a1 == "use_set_board") {
                 k = "true";
             }
             println!("={}{}", p, k);
@@ -208,6 +223,10 @@ void main() {
             println!("boardsize");
             println!("clear_board");
             println!("cb");
+            println!("ucb");
+            println!("use_clean_board");
+            println!("usb");
+            println!("use_set_board");
             println!("komi");
             println!("play");
             println!("pb");
@@ -247,6 +266,25 @@ void main() {
             move_history.clear();
             move_count = 0;
             println!("={}", p);
+            board_changed = true;
+        } else if (cmd == "ucb" || cmd == "use_clean_board") {
+            // Use clean board (no twist-cross opening)
+            b.clear();
+            hist_cells.clear();
+            hist_meta.clear();
+            move_history.clear();
+            move_count = 0;
+            println!("={}clean board ready", p);
+            board_changed = true;
+        } else if (cmd == "usb" || cmd == "use_set_board") {
+            // Use set board (twist-cross opening)
+            b.clear();
+            b.setup_opening();
+            hist_cells.clear();
+            hist_meta.clear();
+            move_history.clear();
+            move_count = 0;
+            println!("={}set board ready (twist-cross)", p);
             board_changed = true;
         } else if (cmd == "komi") {
             // Wood Capture Go has no komi; only 0 is acceptable
