@@ -151,6 +151,8 @@ void main() {
             cmd = "result";
         } else if (cmd == "pm") {
             cmd = "print_moves";
+        } else if (cmd == "move_history") {
+            cmd = "print_moves";
         } else if (cmd == "gb") {
             cmd = "genmove";
             a1 = "black";
@@ -253,9 +255,9 @@ void main() {
             println!("rw");
             println!("undo");
             println!("fixed_handicap");
-            println!("move_history");
-            println!("pm");
             println!("print_moves");
+            println!("pm");
+            println!("move_history");
             println!("export_sgf");
         } else if (cmd == "boardsize") {
             i32 n = str_to_i32(a1.clone());
@@ -467,7 +469,10 @@ void main() {
             }
         } else if (cmd == "wood_rules") {
             println!("={}Wood Capture Go Rules v1.0 (2026-09-13)", p);
-        } else if (cmd == "move_history" || cmd == "pm" || cmd == "print_moves") {
+        } else if (cmd == "move_history") {
+            // Alias for standard print_moves command
+            cmd = "print_moves";
+        } else if (cmd == "print_moves" || cmd == "pm") {
             // Display move history in simple text format
             // Format: move_number: color x,y captured_count
             if (move_count == 0) {
