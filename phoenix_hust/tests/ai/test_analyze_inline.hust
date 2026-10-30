@@ -1,0 +1,141 @@
+// test_analyze_inline.hust - 内联调试 analyze_groups 逻辑
+// 需要 use debug 因为 board.hust 依赖它
+
+use board;
+use debug;
+
+void main() {
+    println!("=== Inline analyze_groups debug ===");
+    
+    Board b = new Board();
+    b.clear();  // 清空棋盘，无扭十字
+    
+    b.place_raw(5, 5, 1);  // 被叫吃的黑子
+    b.place_raw(5, 4, 2);  // 上
+    b.place_raw(5, 6, 2);  // 下
+    b.place_raw(4, 5, 2);  // 左
+    
+    println!("Board:");
+    b.print_board();
+    
+    // 手动内联 analyze_groups 逻辑
+    i32 ai_color = 1;
+    i32 opp = b.opponent(ai_color);
+    i32[13][13] visited = {0};
+    i32[4] dxs = {0, 0, 1, -1};
+    i32[4] dys = {1, -1, 0, 0};
+    
+    i32 my_total_value = 0;
+    i32 opp_total_value = 0;
+    i32 my_atari_count = 0;
+    i32 opp_atari_count = 0;
+    i32 my_atari_max_size = 0;
+    i32 opp_atari_max_size = 0;
+    
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            i32 c = b.get(x, y);
+            if (c == 0 || visited[x][y] == 1) {
+                continue;
+            }
+            
+            println!("Found stone at ({}, {}) color={}", x, y, c);
+            
+            // BFS flood fill
+            i32[] qx;
+            i32[] qy;
+            qx.push(x);
+            qy.push(y);
+            visited[x][y] = 1;
+            i32 head = 0;
+            i32 size = 0;
+            i32 libs = 0;
+            i32[13][13] lib_seen = {0};
+            
+            while (head < (i32)qx.len()) {
+                i32 cx = qx[head];
+                i32 cy = qy[head];
+                head = head + 1;
+                size = size + 1;
+                
+                for (i32 d = 0; d < 4; d++) {
+                    i32 nx = cx + dxs[d];
+                    i32 ny = cy + dys[d];
+                    if (b.is_valid(nx, ny)) {
+                        if (b.get(nx, ny) == 0) {
+                            if (lib_seen[nx][ny] == 0) {
+                                lib_seen[nx][ny] = 1;
+                                libs = libs + 1;
+                            }
+                        } else if (b.get(nx, ny) == c && visited[nx][ny] == 0) {
+                            visited[nx][ny] = 1;
+                            qx.push(nx);
+                            qy.push(ny);
+                        }
+                    }
+                }
+            }
+            
+            println!("  Group: size={}, libs={}", size, libs);
+            
+            // Calculate value
+            f32 w = 1.0;
+            if (libs <= 1) {
+                w = 0.3;
+            } else if (libs == 2) {
+                w = 0.7;
+            } else if (libs == 3) {
+                w = 1.0;
+            } else {
+                w = 1.2;
+            }
+            i32 value = size * (i32)(w * 100.0);
+            println!("  Value: w={} value={}", w, value);
+            
+            if (c == ai_color) {
+                my_total_value = my_total_value + value;
+                if (libs == 1) {
+                    my_atari_count = my_atari_count + 1;
+                    if (size > my_atari_max_size) {
+                        my_atari_max_size = size;
+                    }
+                    println!("  -> MY ATARI! size={}", size);
+                }
+            } else if (c == opp) {
+                opp_total_value = opp_total_value + value;
+                if (libs == 1) {
+                    opp_atari_count = opp_atari_count + 1;
+                    if (size > opp_atari_max_size) {
+                        opp_atari_max_size = size;
+                    }
+                    println!("  -> OPP ATARI! size={}", size);
+                }
+            }
+        }
+    }
+    
+    println!("\n=== Results ===");
+    println!("my_total_value = {}", my_total_value);
+    println!("opp_total_value = {}", opp_total_value);
+    println!("my_atari_count = {}", my_atari_count);
+    println!("opp_atari_count = {}", opp_atari_count);
+    println!("my_atari_max_size = {}", my_atari_max_size);
+    println!("opp_atari_max_size = {}", opp_atari_max_size);
+    
+    // Calculate tactical
+    i32 tactical = 0;
+    if (my_atari_count > 0) {
+        i32 penalty = my_atari_max_size * 50;
+        if (opp_atari_count > 0) {
+            penalty = penalty / 2;
+        }
+        tactical = tactical - penalty;
+        println!("My atari penalty: {}", penalty);
+    }
+    if (opp_atari_count > 0) {
+        i32 bonus = opp_atari_max_size * 60;
+        tactical = tactical + bonus;
+        println!("Opp atari bonus: {}", bonus);
+    }
+    println!("tactical = {}", tactical);
+}

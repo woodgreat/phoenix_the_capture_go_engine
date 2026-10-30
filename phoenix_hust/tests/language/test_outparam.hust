@@ -1,0 +1,40 @@
+// test_outparam.hust - 验证 Hust out-param 是否工作
+
+use board;
+use debug;
+
+void main() {
+    println!("=== Test Out-Param ===");
+    
+    Board b = new Board();
+    b.clear();
+    b.place_raw(5, 5, 1);  // 黑子
+    b.place_raw(5, 4, 2);  // 白子
+    b.place_raw(5, 6, 2);  // 白子
+    b.place_raw(4, 5, 2);  // 白子
+    
+    // 测试 out-param
+    i32 my_gval = 0;
+    i32 opp_gval = 0;
+    i32 my_atari_cnt = 0;
+    i32 opp_atari_cnt = 0;
+    i32 my_atari_max = 0;
+    i32 opp_atari_max = 0;
+    
+    println!("Before call:");
+    println!("  my_atari_cnt = {}", my_atari_cnt);
+    
+    b.analyze_groups(1, my_gval, opp_gval, my_atari_cnt, opp_atari_cnt, my_atari_max, opp_atari_max);
+    
+    println!("After call:");
+    println!("  my_gval = {}", my_gval);
+    println!("  opp_gval = {}", opp_gval);
+    println!("  my_atari_cnt = {}", my_atari_cnt);
+    println!("  opp_atari_cnt = {}", opp_atari_cnt);
+    println!("  my_atari_max = {}", my_atari_max);
+    println!("  opp_atari_max = {}", opp_atari_max);
+    
+    // 直接检查黑子气数
+    i32 libs = b.count_liberties(5, 5);
+    println!("Direct count_liberties(5,5) = {}", libs);
+}

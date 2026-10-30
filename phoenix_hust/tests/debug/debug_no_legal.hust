@@ -1,0 +1,81 @@
+// debug_no_legal.hust - 调试无合法走法问题
+
+use board;
+use ai;
+use debug;
+
+void main() {
+    println!("=== Debug No Legal Move ===");
+    
+    // 重现白方第 14 手的局面
+    // 从自对弈输出重建棋盘
+    Board b = new Board();
+    b.setup_opening();
+    
+    // 手动重现前面的走法（根据自对弈输出）
+    // Move 1: Black (7,7) - 扭十字已有 (6,6),(7,7) 黑，(6,7),(7,6) 白
+    // 但自对弈显示 Black plays at (7, 7)，这是扭十字的一部分？
+    // 让我重新看...
+    
+    // 实际上扭十字是 (6,6)=黑, (6,7)=白, (7,6)=白, (7,7)=黑
+    // 所以 (7,7) 已经有黑子了！
+    
+    // 让我重新理解自对弈的输出...
+    // 自对弈第 13 手后的棋盘：
+    // 9 . . . . . W W W . . . . . 
+    // 8 . . . . . B W B B . . . . 
+    // 7 . . . . B . B W B . . . . 
+    // 6 . . . B . B W . . . . . . 
+    
+    // 手动放置这些子
+    b.clear();
+    b.setup_opening();  // (6,6)=B, (6,7)=W, (7,6)=W, (7,7)=B
+    
+    // 根据棋盘状态放置其他子
+    b.place_raw(5, 9, 2);  // W
+    b.place_raw(6, 9, 2);  // W
+    b.place_raw(7, 9, 2);  // W
+    b.place_raw(5, 8, 1);  // B
+    b.place_raw(6, 8, 2);  // W
+    b.place_raw(7, 8, 1);  // B
+    b.place_raw(8, 8, 1);  // B
+    b.place_raw(4, 7, 1);  // B
+    b.place_raw(6, 7, 1);  // B
+    b.place_raw(7, 7, 2);  // W
+    b.place_raw(8, 7, 1);  // B
+    b.place_raw(3, 6, 1);  // B
+    b.place_raw(5, 6, 1);  // B
+    b.place_raw(6, 6, 2);  // W
+    
+    println!("Reconstructed board:");
+    b.print_board();
+    
+    // 检查白方 (2) 的合法走法
+    println!("\nChecking legal moves for White (2):");
+    i32 legal_count = 0;
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            if (b.get(x, y) == 0) {
+                // 尝试放置白子
+                i32 result = b.place_stone(x, y, 2);
+                if (result >= 0) {
+                    println!("  Legal: ({}, {}) captures={}", x, y, result);
+                    legal_count = legal_count + 1;
+                    // 撤销（需要手动恢复，place_stone 会修改状态）
+                    // 这里只是测试，不撤销
+                }
+            }
+        }
+    }
+    println!("Total legal moves for White: {}", legal_count);
+    
+    // 检查白方是否有 atari
+    i32[6] gres = b.analyze_groups(2);
+    println!("\nWhite atari count: {}", gres[2]);
+    println!("White atari max size: {}", gres[4]);
+    
+    // 检查黑方是否有 atari
+    i32[6] gres_b = b.analyze_groups(1);
+    println!("Black atari count: {}", gres_b[2]);
+    println!("Black atari max size: {}", gres_b[4]);
+}

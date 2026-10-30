@@ -1,0 +1,96 @@
+// test_white_advantage.hust - 验证白方是否能赢
+
+use board;
+use ai;
+use debug;
+
+void main() {
+    println!("=== Test: Can White Win? ===");
+    
+    // 测试 1：白方先手（交换颜色）
+    println!("\n--- Test 1: White moves first ---");
+    Board b = new Board();
+    b.setup_opening();
+    
+    // 白方先走（模拟黑方优势消失）
+    i32 move_count = 0;
+    i32 max_moves = 200;
+    i32 current_color = 2;  // 白先！
+    
+    while (move_count < max_moves) {
+        AIWrapper ai = new AIWrapper(5);
+        Board new_b = ai.genmove(b, current_color);
+        
+        i32 ax = ai.last_x();
+        i32 ay = ai.last_y();
+        if (ax < 0 || ay < 0) {
+            println!("No legal move for {} at move {}", 
+                if current_color == 1 { "Black" } else { "White" },
+                move_count + 1);
+            break;
+        }
+        
+        b = new_b;
+        
+        i32 black_captures = b.get_captures(1);
+        i32 white_captures = b.get_captures(2);
+        
+        if (black_captures >= 6) {
+            println!("Black wins! ({} moves)", move_count + 1);
+            break;
+        }
+        if (white_captures >= 5) {
+            println!("White wins! ({} moves)", move_count + 1);
+            break;
+        }
+        
+        current_color = if current_color == 1 { 2 } else { 1 };
+        move_count = move_count + 1;
+    }
+    
+    println!("Result: moves={}, black={}, white={}", 
+        move_count, b.get_captures(1), b.get_captures(2));
+    
+    // 测试 2：黑方 Level 3 vs 白方 Level 5（白方更强）
+    println!("\n--- Test 2: Black L3 vs White L5 ---");
+    Board b2 = new Board();
+    b2.setup_opening();
+    
+    move_count = 0;
+    current_color = 1;
+    
+    while (move_count < max_moves) {
+        i32 level = if current_color == 1 { 3 } else { 5 };
+        AIWrapper ai = new AIWrapper(level);
+        Board new_b = ai.genmove(b2, current_color);
+        
+        i32 ax = ai.last_x();
+        i32 ay = ai.last_y();
+        if (ax < 0 || ay < 0) {
+            println!("No legal move for {} at move {}", 
+                if current_color == 1 { "Black" } else { "White" },
+                move_count + 1);
+            break;
+        }
+        
+        b2 = new_b;
+        
+        i32 black_captures = b2.get_captures(1);
+        i32 white_captures = b2.get_captures(2);
+        
+        if (black_captures >= 6) {
+            println!("Black wins! ({} moves)", move_count + 1);
+            break;
+        }
+        if (white_captures >= 5) {
+            println!("White wins! ({} moves)", move_count + 1);
+            break;
+        }
+        
+        current_color = if current_color == 1 { 2 } else { 1 };
+        move_count = move_count + 1;
+    }
+    
+    println!("Result: moves={}, black={}, white={}", 
+        move_count, b2.get_captures(1), b2.get_captures(2));
+}

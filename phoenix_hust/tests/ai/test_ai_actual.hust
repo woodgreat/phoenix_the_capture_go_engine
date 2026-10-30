@@ -1,0 +1,51 @@
+// test_ai_actual.hust - 验证 AI 实际走的局面和评估
+
+use board;
+use ai;
+use debug;
+
+void main() {
+    println!("=== AI Actual Move Verification ===");
+    
+    // 构造被叫吃局面
+    Board b = new Board();
+    b.clear();
+    b.place_raw(5, 5, 1);  // 被叫吃的黑子
+    b.place_raw(5, 4, 2);  // 上
+    b.place_raw(5, 6, 2);  // 下
+    b.place_raw(4, 5, 2);  // 左
+    
+    println!("Before AI move:");
+    b.print_board();
+    
+    // AI 走棋
+    AIWrapper ai = new AIWrapper(5);
+    Board result = ai.genmove(b, 1);
+    
+    println!("\nAfter AI move:");
+    result.print_board();
+    
+    i32 ax = ai.last_x();
+    i32 ay = ai.last_y();
+    println!("AI played at: ({}, {})", ax, ay);
+    
+    // 检查 AI 走后的局面
+    i32 libs_55 = result.count_liberties(5, 5);
+    i32 libs_64 = result.count_liberties(6, 4);
+    i32 libs_65 = result.count_liberties(6, 5);
+    println!("Liberties (5,5): {}", libs_55);
+    println!("Liberties (6,4): {}", libs_64);
+    println!("Liberties (6,5): {}", libs_65);
+    
+    // 评估 AI 走后的局面
+    i32 score = result.evaluate_for(1);
+    println!("evaluate_for(1) after AI move = {}", score);
+    
+    // 检查 (6,5) 是否为空
+    i32 val_65 = result.get(6, 5);
+    println!("Value at (6,5): {}", val_65);
+    
+    // 检查 (6,4) 是否有子
+    i32 val_64 = result.get(6, 4);
+    println!("Value at (6,4): {}", val_64);
+}

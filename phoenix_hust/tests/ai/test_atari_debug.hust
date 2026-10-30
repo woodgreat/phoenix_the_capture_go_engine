@@ -1,0 +1,60 @@
+// test_atari_debug.hust - 调试叫吃响应问题
+
+use board;
+use ai;
+
+void main() {
+    println!("=== Debug: evaluate_for with atari ===");
+    
+    // 构造同样的局面
+    Board b = new Board();
+    b.clear();
+    
+    b.place_raw(5, 5, 1);  // 被叫吃的黑子
+    b.place_raw(5, 4, 2);  // 上
+    b.place_raw(5, 6, 2);  // 下
+    b.place_raw(4, 5, 2);  // 左
+    
+    println!("Board state:");
+    b.print_board();
+    
+    // 检查黑子气数
+    i32 libs = b.count_liberties(5, 5);
+    println!("Black stone (5,5) liberties: {}", libs);
+    
+    // 手动调用 evaluate_for 看结果
+    i32 score = b.evaluate_for(1);
+    println!("evaluate_for(1) = {}", score);
+    
+    // 测试救棋后的评估
+    Board b2 = new Board();
+    b2.clear();
+    b2.place_raw(5, 5, 1);
+    b2.place_raw(5, 4, 2);
+    b2.place_raw(5, 6, 2);
+    b2.place_raw(4, 5, 2);
+    b2.place_raw(6, 5, 1);  // 救棋
+    
+    println!("\nAfter saving at (6,5):");
+    b2.print_board();
+    i32 libs2 = b2.count_liberties(5, 5);
+    println!("Black stone (5,5) liberties after save: {}", libs2);
+    i32 score2 = b2.evaluate_for(1);
+    println!("evaluate_for(1) after save = {}", score2);
+    
+    // 测试 AI 实际走的 (6,4)
+    Board b3 = new Board();
+    b3.clear();
+    b3.place_raw(5, 5, 1);
+    b3.place_raw(5, 4, 2);
+    b3.place_raw(5, 6, 2);
+    b3.place_raw(4, 5, 2);
+    b3.place_raw(6, 4, 1);  // AI 实际走的
+    
+    println!("\nAfter AI move at (6,4):");
+    b3.print_board();
+    i32 libs3 = b3.count_liberties(5, 5);
+    println!("Black stone (5,5) liberties after AI move: {}", libs3);
+    i32 score3 = b3.evaluate_for(1);
+    println!("evaluate_for(1) after AI move = {}", score3);
+}

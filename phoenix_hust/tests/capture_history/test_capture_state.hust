@@ -1,0 +1,119 @@
+// test_capture_state.hust - 验证提子状态记录准确性
+
+use board;
+use debug;
+
+void main() {
+    println!("=== Test Capture State Accuracy ===");
+    
+    // 测试 1：简单提子
+    println!("\n--- Test 1: Simple capture ---");
+    Board b = new Board();
+    b.clear();
+    
+    // 黑子 (5,5)，白子包围三面
+    b.place_raw(5, 5, 1);
+    b.place_raw(5, 4, 2);
+    b.place_raw(5, 6, 2);
+    b.place_raw(4, 5, 2);
+    
+    println!("Before capture:");
+    b.print_board();
+    println!("Black captures: {}", b.get_captures(1));
+    println!("White captures: {}", b.get_captures(2));
+    
+    // 白方下 (6,5) 提黑子
+    i32 result = b.place_stone(6, 5, 2);
+    println!("\nWhite plays (6,5), result: {}", result);
+    println!("After capture:");
+    b.print_board();
+    println!("Black captures: {}", b.get_captures(1));
+    println!("White captures: {}", b.get_captures(2));
+    
+    // 验证：白方应该提了 1 子
+    if (b.get_captures(2) == 1) {
+        println!("[PASS] White capture count correct");
+    } else {
+        println!("[FAIL] White capture count wrong: {}", b.get_captures(2));
+    }
+    
+    // 验证：黑子 (5,5) 应该被提掉
+    if (b.get(5, 5) == 0) {
+        println!("[PASS] Black stone captured");
+    } else {
+        println!("[FAIL] Black stone still there: {}", b.get(5, 5));
+    }
+    
+    // 测试 2：多子提子
+    println!("\n--- Test 2: Multi-stone capture ---");
+    Board b2 = new Board();
+    b2.clear();
+    
+    // 黑子 (5,5)(5,6) 相连，白子包围
+    b2.place_raw(5, 5, 1);
+    b2.place_raw(5, 6, 1);
+    b2.place_raw(5, 4, 2);
+    b2.place_raw(5, 7, 2);
+    b2.place_raw(4, 5, 2);
+    b2.place_raw(4, 6, 2);
+    b2.place_raw(6, 5, 2);  // 这步会提掉两个黑子
+    
+    println!("Before capture:");
+    b2.print_board();
+    
+    i32 result2 = b2.place_stone(6, 6, 2);
+    println!("\nWhite plays (6,6), result: {}", result2);
+    println!("After capture:");
+    b2.print_board();
+    println!("White captures: {}", b2.get_captures(2));
+    
+    // 验证：白方应该提了 2 子
+    if (b2.get_captures(2) == 2) {
+        println!("[PASS] Multi-stone capture count correct");
+    } else {
+        println!("[FAIL] Multi-stone capture count wrong: {}", b2.get_captures(2));
+    }
+    
+    // 测试 3：提子位置记录（通过历史）
+    println!("\n--- Test 3: Capture position tracking ---");
+    // 注意：当前 Board 实现没有记录被提子的位置历史
+    // 只有 ko_x/ko_y 记录最后一个单提位置
+    println!("Ko point: ({}, {})", b2.ko_x, b2.ko_y);
+    // 多子提子时 ko_x/ko_y 应该为 -1
+    if (b2.ko_x == -1 && b2.ko_y == -1) {
+        println!("[PASS] Ko point cleared for multi-stone capture");
+    } else {
+        println!("[INFO] Ko point set to ({}, {})", b2.ko_x, b2.ko_y);
+    }
+    
+    // 测试 4：状态一致性
+    println!("\n--- Test 4: State consistency ---");
+    Board b3 = new Board();
+    b3.clear();
+    
+    // 构造一个需要撤销的局面
+    b3.place_raw(5, 5, 1);
+    b3.place_raw(5, 4, 2);
+    b3.place_raw(5, 6, 2);
+    b3.place_raw(4, 5, 2);
+    
+    i32 bc_before = b3.get_captures(1);
+    i32 wc_before = b3.get_captures(2);
+    i32 mc_before = b3.move_count;
+    
+    // 尝试一个自杀手（应该失败并撤销）
+    i32 result3 = b3.place_stone(6, 5, 1);
+    println!("Suicide move result: {}", result3);
+    
+    // 验证状态没有变化
+    if (b3.get_captures(1) == bc_before && b3.get_captures(2) == wc_before) {
+        println!("[PASS] Capture counts unchanged after failed move");
+    } else {
+        println!("[FAIL] Capture counts changed!");
+    }
+    if (b3.move_count == mc_before) {
+        println!("[PASS] Move count unchanged after failed move");
+    } else {
+        println!("[FAIL] Move count changed: {} -> {}", mc_before, b3.move_count);
+    }
+}

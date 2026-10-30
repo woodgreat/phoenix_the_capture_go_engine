@@ -1,0 +1,67 @@
+// test_atari_response.hust - 验证 AI 是否能正确应对叫吃
+// 构造一个黑子被白子叫吃的局面，看 AI 是否会救
+
+use board;
+use ai;
+
+// 辅助：打印棋盘
+void print_board(Board b) {
+    b.print_board();
+}
+
+// 辅助：检查某点是否有子
+bool has_stone(Board b, i32 x, i32 y, i32 color) {
+    return b.get(x, y) == color;
+}
+
+void main() {
+    println!("=== Test: AI responds to atari ===");
+    
+    // 构造局面：黑子(5,5)被白子包围，只剩1气
+    Board b = new Board();
+    b.clear();  // 清空扭十字开局
+    
+    // 放黑子
+    b.place_raw(5, 5, 1);  // 被叫吃的黑子
+    
+    // 放白子包围（3面）
+    b.place_raw(5, 4, 2);  // 上
+    b.place_raw(5, 6, 2);  // 下
+    b.place_raw(4, 5, 2);  // 左
+    
+    // 现在黑子(5,5)只剩1气（右边6,5）
+    println!("Before AI move:");
+    b.print_board();
+    
+    // 检查黑子气数
+    i32 libs = b.count_liberties(5, 5);
+    println!("Black stone at (5,5) liberties: {}", libs);
+    
+    // AI 走棋
+    AIWrapper ai = new AIWrapper(5);
+    Board result = ai.genmove(b, 1);  // 黑方走棋
+    
+    println!("\nAfter AI move:");
+    result.print_board();
+    
+    // 检查 AI 是否救了(5,5)
+    i32 ax = ai.last_x();
+    i32 ay = ai.last_y();
+    println!("AI played at: ({}, {})", ax, ay);
+    
+    // 验证：AI 应该下在(6,5)救黑子
+    if (ax == 6 && ay == 5) {
+        println!("[PASS] AI saved the atari stone at (6,5)");
+    } else {
+        println!("[FAIL] AI did not save atari stone, played at ({}, {})", ax, ay);
+    }
+    
+    // 检查黑子是否还有气
+    i32 new_libs = result.count_liberties(5, 5);
+    println!("Black stone liberties after move: {}", new_libs);
+    if (new_libs > 1) {
+        println!("[PASS] Black stone has more liberties");
+    } else {
+        println!("[FAIL] Black stone still in atari or captured");
+    }
+}

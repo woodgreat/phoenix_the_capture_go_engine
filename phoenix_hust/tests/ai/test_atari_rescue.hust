@@ -1,0 +1,50 @@
+// test_atari_rescue.hust - 验证 atari 救援逻辑
+
+use board;
+use ai;
+use debug;
+
+void main() {
+    println!("=== Test Atari Rescue ===");
+    
+    // 构造被叫吃局面（空棋盘）
+    Board b = new Board();
+    b.clear();
+    b.place_raw(5, 5, 1);  // 被叫吃的黑子
+    b.place_raw(5, 4, 2);  // 上
+    b.place_raw(5, 6, 2);  // 下
+    b.place_raw(4, 5, 2);  // 左
+    
+    println!("Before AI move:");
+    b.print_board();
+    
+    // 检查 analyze_groups
+    i32[6] gres = b.analyze_groups(1);
+    i32 my_atari_cnt = gres[2];
+    i32 my_atari_max = gres[4];
+    
+    println!("analyze_groups results:");
+    println!("  my_atari_cnt = {}", my_atari_cnt);
+    println!("  my_atari_max = {}", my_atari_max);
+    
+    // AI 走棋
+    AIWrapper ai = new AIWrapper(5);
+    Board result = ai.genmove(b, 1);
+    
+    println!("\nAfter AI move:");
+    result.print_board();
+    
+    i32 ax = ai.last_x();
+    i32 ay = ai.last_y();
+    println!("AI played at: ({}, {})", ax, ay);
+    
+    // 检查是否救了(5,5)
+    i32 libs_55 = result.count_liberties(5, 5);
+    println!("Black stone (5,5) liberties: {}", libs_55);
+    
+    if (libs_55 > 1) {
+        println!("[PASS] AI saved the atari stone!");
+    } else {
+        println!("[FAIL] AI did not save atari stone");
+    }
+}

@@ -1,0 +1,48 @@
+// test_analyze_groups.hust - 调试 analyze_groups 函数
+
+use board;
+
+void main() {
+    println!("=== Debug: analyze_groups ===");
+    
+    Board b = new Board();
+    b.clear();
+    
+    b.place_raw(5, 5, 1);  // 被叫吃的黑子
+    b.place_raw(5, 4, 2);  // 上
+    b.place_raw(5, 6, 2);  // 下
+    b.place_raw(4, 5, 2);  // 左
+    
+    println!("Board:");
+    b.print_board();
+    
+    // 手动调用 analyze_groups
+    i32 my_gval = 0;
+    i32 opp_gval = 0;
+    i32 my_atari_cnt = 0;
+    i32 opp_atari_cnt = 0;
+    i32 my_atari_max = 0;
+    i32 opp_atari_max = 0;
+    
+    b.analyze_groups(1, my_gval, opp_gval, my_atari_cnt, opp_atari_cnt, my_atari_max, opp_atari_max);
+    
+    println!("analyze_groups(1):");
+    println!("  my_gval = {}", my_gval);
+    println!("  opp_gval = {}", opp_gval);
+    println!("  my_atari_cnt = {}", my_atari_cnt);
+    println!("  opp_atari_cnt = {}", opp_atari_cnt);
+    println!("  my_atari_max = {}", my_atari_max);
+    println!("  opp_atari_max = {}", opp_atari_max);
+    
+    // 检查黑子气数
+    i32 libs = b.count_liberties(5, 5);
+    println!("Black stone (5,5) liberties: {}", libs);
+    
+    // 检查白子气数
+    i32 libs_w1 = b.count_liberties(5, 4);
+    i32 libs_w2 = b.count_liberties(5, 6);
+    i32 libs_w3 = b.count_liberties(4, 5);
+    println!("White (5,4) liberties: {}", libs_w1);
+    println!("White (5,6) liberties: {}", libs_w2);
+    println!("White (4,5) liberties: {}", libs_w3);
+}

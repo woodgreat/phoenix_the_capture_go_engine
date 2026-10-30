@@ -1,0 +1,214 @@
+// test_eval_breakdown.hust - 打印 evaluate_for 每一项的详细分解
+
+use board;
+use debug;
+
+void main() {
+    println!("=== Evaluate Breakdown Debug ===");
+    
+    // 构造被叫吃局面
+    Board b = new Board();
+    b.clear();
+    b.place_raw(5, 5, 1);  // 被叫吃的黑子
+    b.place_raw(5, 4, 2);  // 上
+    b.place_raw(5, 6, 2);  // 下
+    b.place_raw(4, 5, 2);  // 左
+    
+    println!("Original position (black 5,5 in atari):");
+    b.print_board();
+    
+    // 手动计算每一项
+    i32 ai_color = 1;
+    i32 opp = b.opponent(ai_color);
+    i32 my_stones = 0;
+    i32 opp_stones = 0;
+    i32 my_libs = 0;
+    i32 opp_libs = 0;
+    
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            i32 c = b.get(x, y);
+            if (c == ai_color) {
+                my_stones = my_stones + 1;
+            } else if (c == opp) {
+                opp_stones = opp_stones + 1;
+            } else {
+                i32 has_my = 0;
+                i32 has_opp = 0;
+                i32[4] dxs = {0, 0, 1, -1};
+                i32[4] dys = {1, -1, 0, 0};
+                for (i32 d = 0; d < 4; d++) {
+                    i32 nx = x + dxs[d];
+                    i32 ny = y + dys[d];
+                    if (b.is_valid(nx, ny)) {
+                        if (b.get(nx, ny) == ai_color) {
+                            has_my = 1;
+                        }
+                        if (b.get(nx, ny) == opp) {
+                            has_opp = 1;
+                        }
+                    }
+                }
+                my_libs = my_libs + has_my;
+                opp_libs = opp_libs + has_opp;
+            }
+        }
+    }
+    
+    i32 cap_diff = b.get_captures(1) - b.get_captures(2);
+    i32 eye = b.count_eye_potential(1) - b.count_eye_potential(2);
+    i32 conn = b.count_connection_strength(1) - b.count_connection_strength(2);
+    
+    println!("\n--- Original position ---");
+    println!("my_stones = {}, opp_stones = {}", my_stones, opp_stones);
+    println!("my_libs = {}, opp_libs = {}", my_libs, opp_libs);
+    println!("cap_diff = {}", cap_diff);
+    println!("eye = {}", eye);
+    println!("conn = {}", conn);
+    println!("stone_diff * 100 = {}", (my_stones - opp_stones) * 100);
+    println!("lib_diff * 8 = {}", (my_libs - opp_libs) * 8);
+    println!("cap_diff * 100 = {}", cap_diff * 100);
+    println!("eye * 50 = {}", eye * 50);
+    println!("conn * 30 = {}", conn * 30);
+    
+    i32 score_orig = b.evaluate_for(1);
+    println!("evaluate_for(1) = {}", score_orig);
+    
+    // 测试救棋 (6,5)
+    Board b2 = new Board();
+    b2.clear();
+    b2.place_raw(5, 5, 1);
+    b2.place_raw(5, 4, 2);
+    b2.place_raw(5, 6, 2);
+    b2.place_raw(4, 5, 2);
+    b2.place_raw(6, 5, 1);  // 救棋
+    
+    println!("\n--- After saving at (6,5) ---");
+    b2.print_board();
+    
+    i32 score_save = b2.evaluate_for(1);
+    println!("evaluate_for(1) = {}", score_save);
+    
+    // 手动分解救棋后的评估
+    i32 my_stones2 = 0;
+    i32 opp_stones2 = 0;
+    i32 my_libs2 = 0;
+    i32 opp_libs2 = 0;
+    
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            i32 c = b2.get(x, y);
+            if (c == ai_color) {
+                my_stones2 = my_stones2 + 1;
+            } else if (c == opp) {
+                opp_stones2 = opp_stones2 + 1;
+            } else {
+                i32 has_my = 0;
+                i32 has_opp = 0;
+                i32[4] dxs = {0, 0, 1, -1};
+                i32[4] dys = {1, -1, 0, 0};
+                for (i32 d = 0; d < 4; d++) {
+                    i32 nx = x + dxs[d];
+                    i32 ny = y + dys[d];
+                    if (b2.is_valid(nx, ny)) {
+                        if (b2.get(nx, ny) == ai_color) {
+                            has_my = 1;
+                        }
+                        if (b2.get(nx, ny) == opp) {
+                            has_opp = 1;
+                        }
+                    }
+                }
+                my_libs2 = my_libs2 + has_my;
+                opp_libs2 = opp_libs2 + has_opp;
+            }
+        }
+    }
+    
+    i32 cap_diff2 = b2.get_captures(1) - b2.get_captures(2);
+    i32 eye2 = b2.count_eye_potential(1) - b2.count_eye_potential(2);
+    i32 conn2 = b2.count_connection_strength(1) - b2.count_connection_strength(2);
+    
+    println!("my_stones = {}, opp_stones = {}", my_stones2, opp_stones2);
+    println!("my_libs = {}, opp_libs = {}", my_libs2, opp_libs2);
+    println!("cap_diff = {}", cap_diff2);
+    println!("eye = {}", eye2);
+    println!("conn = {}", conn2);
+    println!("stone_diff * 100 = {}", (my_stones2 - opp_stones2) * 100);
+    println!("lib_diff * 8 = {}", (my_libs2 - opp_libs2) * 8);
+    println!("cap_diff * 100 = {}", cap_diff2 * 100);
+    println!("eye * 50 = {}", eye2 * 50);
+    println!("conn * 30 = {}", conn2 * 30);
+    
+    // 测试不救 (6,4)
+    Board b3 = new Board();
+    b3.clear();
+    b3.place_raw(5, 5, 1);
+    b3.place_raw(5, 4, 2);
+    b3.place_raw(5, 6, 2);
+    b3.place_raw(4, 5, 2);
+    b3.place_raw(6, 4, 1);  // AI 实际走的
+    
+    println!("\n--- After AI move at (6,4) ---");
+    b3.print_board();
+    
+    i32 score_ai = b3.evaluate_for(1);
+    println!("evaluate_for(1) = {}", score_ai);
+    
+    // 手动分解
+    i32 my_stones3 = 0;
+    i32 opp_stones3 = 0;
+    i32 my_libs3 = 0;
+    i32 opp_libs3 = 0;
+    
+    for (i32 x = 0; x < 13; x++) {
+        for (i32 y = 0; y < 13; y++) {
+            i32 c = b3.get(x, y);
+            if (c == ai_color) {
+                my_stones3 = my_stones3 + 1;
+            } else if (c == opp) {
+                opp_stones3 = opp_stones3 + 1;
+            } else {
+                i32 has_my = 0;
+                i32 has_opp = 0;
+                i32[4] dxs = {0, 0, 1, -1};
+                i32[4] dys = {1, -1, 0, 0};
+                for (i32 d = 0; d < 4; d++) {
+                    i32 nx = x + dxs[d];
+                    i32 ny = y + dys[d];
+                    if (b3.is_valid(nx, ny)) {
+                        if (b3.get(nx, ny) == ai_color) {
+                            has_my = 1;
+                        }
+                        if (b3.get(nx, ny) == opp) {
+                            has_opp = 1;
+                        }
+                    }
+                }
+                my_libs3 = my_libs3 + has_my;
+                opp_libs3 = opp_libs3 + has_opp;
+            }
+        }
+    }
+    
+    i32 cap_diff3 = b3.get_captures(1) - b3.get_captures(2);
+    i32 eye3 = b3.count_eye_potential(1) - b3.count_eye_potential(2);
+    i32 conn3 = b3.count_connection_strength(1) - b3.count_connection_strength(2);
+    
+    println!("my_stones = {}, opp_stones = {}", my_stones3, opp_stones3);
+    println!("my_libs = {}, opp_libs = {}", my_libs3, opp_libs3);
+    println!("cap_diff = {}", cap_diff3);
+    println!("eye = {}", eye3);
+    println!("conn = {}", conn3);
+    println!("stone_diff * 100 = {}", (my_stones3 - opp_stones3) * 100);
+    println!("lib_diff * 8 = {}", (my_libs3 - opp_libs3) * 8);
+    println!("cap_diff * 100 = {}", cap_diff3 * 100);
+    println!("eye * 50 = {}", eye3 * 50);
+    println!("conn * 30 = {}", conn3 * 30);
+    
+    println!("\n=== SUMMARY ===");
+    println!("Original: {}", score_orig);
+    println!("Save (6,5): {}", score_save);
+    println!("AI move (6,4): {}", score_ai);
+    println!("Save - AI move = {}", score_save - score_ai);
+}
