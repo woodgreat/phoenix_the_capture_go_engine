@@ -72,13 +72,17 @@ void main() {
     
     // 构造真正的多子提子局面
     // 黑子 (5,5)(5,6) 相连，被白子包围，只剩 1 气 (6,6)
-    b2.place_raw(5, 5, 1);
-    b2.place_raw(5, 6, 1);
-    b2.place_raw(5, 4, 2);  // 白
-    b2.place_raw(4, 5, 2);  // 白
-    b2.place_raw(4, 6, 2);  // 白
-    b2.place_raw(6, 5, 2);  // 白
+    b2.place_raw(5, 5, 1);  // 黑
+    b2.place_raw(5, 6, 1);  // 黑
+    b2.place_raw(5, 4, 2);  // 白 上
+    b2.place_raw(4, 5, 2);  // 白 左
+    b2.place_raw(4, 6, 2);  // 白 左下
+    b2.place_raw(6, 5, 2);  // 白 右下
+    b2.place_raw(5, 7, 2);  // 白 上右（封住最后一口气）
     // 现在黑子 group (5,5)(5,6) 的气只有 (6,6)
+    
+    println!("Before capture:");
+    b2.print_board();
     
     // 白方下 (6,6) 提两个黑子
     i32 result2 = b2.place_stone(6, 6, 2);
