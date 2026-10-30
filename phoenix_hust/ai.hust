@@ -95,8 +95,21 @@ public class Level1 implements MoveGenerator {
                     }
                     if (captures || alive) {
                         i32 enc = x * 13 + y;
-                        empty_moves[n_empty] = enc;
-                        n_empty = n_empty + 1;
+                        // Level 1: beginners prefer playing near existing stones
+                        bool near_stone = false;
+                        for (i32 d = 0; d < 4; d++) {
+                            i32 nx2 = x + dxs[d];
+                            i32 ny2 = y + dys[d];
+                            if (b2.is_valid(nx2, ny2)) {
+                                if (b2.get(nx2, ny2) != 0) {
+                                    near_stone = true;
+                                }
+                            }
+                        }
+                        if (near_stone) {
+                            empty_moves[n_empty] = enc;
+                            n_empty = n_empty + 1;
+                        }
                         if (captures) {
                             if (!is_ko) {
                                 capture_moves[n_cap] = enc;
