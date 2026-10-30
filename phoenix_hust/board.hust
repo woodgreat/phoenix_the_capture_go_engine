@@ -555,6 +555,11 @@ public class Board {
         this.search_nodes = 0;
         this.search_budget = budget;
     }
+    
+    // Set random seed for move selection randomness
+    public void set_seed(i32 seed) {
+        this.rng_seed = seed;
+    }
 
     // Ko-point query for the AI layer (ko_x/ko_y stay private)
     public bool is_ko_point(i32 x, i32 y) {

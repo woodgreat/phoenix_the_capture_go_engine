@@ -1,0 +1,128 @@
+// selfplay5.hust - 运行 5 盘自对弈，检查对局质量
+
+use board;
+use ai;
+use debug;
+
+// 记录一盘对局的结果
+class GameResult {
+    i32 total_moves;
+    i32 black_captures;
+    i32 white_captures;
+    i32 winner;  // 1=black, 2=white, 0=draw/unfinished
+    i32[200] move_x;  // 记录每手位置
+    i32[200] move_y;
+    i32[200] move_color;
+    
+    public GameResult() {
+        this.total_moves = 0;
+        this.black_captures = 0;
+        this.white_captures = 0;
+        this.winner = 0;
+    }
+}
+
+void main() {
+    println!("=== 5-Game Self-Play Test ===");
+    
+    // 运行 5 盘对局
+    for (i32 game = 0; game < 5; game++) {
+        println!("\n========================================");
+        println!("=== Game {} ===", game + 1);
+        println!("========================================");
+        
+        // 创建棋盘（带扭十字开局）
+        Board b = new Board();
+        b.setup_opening();
+        // 设置随机种子，每盘不同
+        b.set_seed(88675123 + game * 1000);
+        
+        // 创建 AI（黑方 Level 5，白方 Level 5）
+        i32 black_level = 5;
+        i32 white_level = 5;
+        
+        // 对弈循环
+        i32 move_count = 0;
+        i32 max_moves = 200;
+        i32 current_color = 1;  // 黑先
+        bool game_over = false;
+        i32 winner = 0;
+        
+        // 记录棋谱
+        i32[200] moves_x = {0};
+        i32[200] moves_y = {0};
+        i32[200] moves_color = {0};
+        
+        while (move_count < max_moves && !game_over) {
+            // 当前方走棋
+            AIWrapper current_ai = new AIWrapper(if current_color == 1 { black_level } else { white_level });
+            Board new_b = current_ai.genmove(b, current_color);
+            
+            // 检查是否有合法走法
+            i32 ax = current_ai.last_x();
+            i32 ay = current_ai.last_y();
+            if (ax < 0 || ay < 0) {
+                println!("Game {}: No legal move for {} at move {}", 
+                    game + 1,
+                    if current_color == 1 { "Black" } else { "White" },
+                    move_count + 1);
+                break;
+            }
+            
+            // 记录走法
+            moves_x[move_count] = ax;
+            moves_y[move_count] = ay;
+            moves_color[move_count] = current_color;
+            
+            // 更新棋盘
+            b = new_b;
+            
+            // 检查吃子数
+            i32 black_captures = b.get_captures(1);
+            i32 white_captures = b.get_captures(2);
+            
+            // 检查胜负
+            if (black_captures >= 6) {
+                println!("Game {}: Black wins! (captured {} stones in {} moves)", 
+                    game + 1, black_captures, move_count + 1);
+                winner = 1;
+                game_over = true;
+            } else if (white_captures >= 5) {
+                println!("Game {}: White wins! (captured {} stones in {} moves)", 
+                    game + 1, white_captures, move_count + 1);
+                winner = 2;
+                game_over = true;
+            }
+            
+            // 切换颜色
+            current_color = if current_color == 1 { 2 } else { 1 };
+            move_count = move_count + 1;
+        }
+        
+        // 输出结果
+        if (!game_over) {
+            println!("Game {}: Unfinished after {} moves", game + 1, move_count);
+        }
+        
+        println!("Game {} summary: moves={}, black_caps={}, white_caps={}, winner={}", 
+            game + 1, move_count, b.get_captures(1), b.get_captures(2), winner);
+        
+        // 打印棋谱
+        println!("Game {} moves:", game + 1);
+        for (i32 i = 0; i < move_count; i++) {
+            print!("  {}. ", i + 1);
+            if moves_color[i] == 1 {
+                print!("B");
+            } else {
+                print!("W");
+            }
+            println!("({},{})", moves_x[i], moves_y[i]);
+        }
+        
+        // 打印提子历史
+        println!("Game {} capture history:", game + 1);
+        b.print_capture_history();
+    }
+    
+    println!("\n=== All 5 Games Complete ===");
+}

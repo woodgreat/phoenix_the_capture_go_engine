@@ -849,6 +849,11 @@ public class Level5 implements MoveGenerator {
                     if (val > best_val) {
                         best_val = val;
                         best_enc = x * 13 + y;
+                    } else if (val == best_val && val > -999999) {
+                        // Random tie-breaking: equal value, randomly switch
+                        if (b2.rand_below(2) == 0) {
+                            best_enc = x * 13 + y;
+                        }
                     }
                 }
             }
