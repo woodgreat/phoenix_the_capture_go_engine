@@ -751,20 +751,63 @@ public class Level5 implements MoveGenerator {
                     }
                 }
             }
-            // If we found a rescue move, use it
+            // If we found a rescue move, try them in order of best value
             if (best_enc >= 0) {
-                debug_log_i32(1, "L5", "using rescue move", best_enc);
+                debug_log_i32(1, "L5", "trying rescue move", best_enc);
                 i32 mx = best_enc / 13;
                 i32 my = best_enc - mx * 13;
                 i32 r = b2.place_stone(mx, my, color);
                 if (r >= 0) {
+                    debug_log_i32_2(1, "L5", "rescue_ok_x", mx, "rescue_ok_y", my);
                     this.last_x = mx;
                     this.last_y = my;
+                    return b2;
                 } else {
+                    debug_log_i32(1, "L5", "rescue failed, trying others", r);
+                    // Try other rescue moves
+                    for (i32 x = 0; x < 13; x++) {
+                        for (i32 y = 0; y < 13; y++) {
+                            if (b2.get(x, y) == 0) {
+                                // Quick check if this is a rescue move
+                                bool is_rescue = false;
+                                i32[13][13] snap2 = {0};
+                                for (i32 i = 0; i < 13; i++) {
+                                    for (i32 j = 0; j < 13; j++) {
+                                        snap2[i][j] = b2.get(i, j);
+                                    }
+                                }
+                                b2.set(x, y, color);
+                                for (i32 d = 0; d < 4; d++) {
+                                    i32 nx = x + dxs[d];
+                                    i32 ny = y + dys[d];
+                                    if (b2.is_valid(nx, ny) && b2.get(nx, ny) == color) {
+                                        if (b2.count_liberties(nx, ny) > 1) {
+                                            is_rescue = true;
+                                        }
+                                    }
+                                }
+                                for (i32 i = 0; i < 13; i++) {
+                                    for (i32 j = 0; j < 13; j++) {
+                                        b2.set(i, j, snap2[i][j]);
+                                    }
+                                }
+                                if (is_rescue) {
+                                    r = b2.place_stone(x, y, color);
+                                    if (r >= 0) {
+                                        debug_log_i32_2(1, "L5", "fallback_rescue_x", x, "fallback_rescue_y", y);
+                                        this.last_x = x;
+                                        this.last_y = y;
+                                        return b2;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // No rescue worked, return -1
                     this.last_x = -1;
                     this.last_y = -1;
+                    return b2;
                 }
-                return b2;
             }
         }
         
@@ -811,6 +854,18 @@ public class Level5 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
+            debug_log(1, "L5", "ERROR: no legal move found!");
+            debug_log_i32(1, "L5", "color", color);
+            b2.print_board();
+            i32 legal = 0;
+            for (i32 lx = 0; lx < 13; lx++) {
+                for (i32 ly = 0; ly < 13; ly++) {
+                    if (b2.get(lx, ly) == 0) {
+                        legal = legal + 1;
+                    }
+                }
+            }
+            debug_log_i32(1, "L5", "empty_points", legal);
             this.last_x = -1;
             this.last_y = -1;
             return b2;
