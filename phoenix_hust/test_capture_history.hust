@@ -1,0 +1,138 @@
+// test_capture_history.hust - 验证提子历史记录功能
+
+use board;
+use debug;
+
+void main() {
+    println!("=== Test Capture History ===");
+    
+    // 测试 1：简单提子历史
+    println!("\n--- Test 1: Simple capture history ---");
+    Board b = new Board();
+    b.clear();
+    
+    // 黑子 (5,5)，白子包围三面
+    b.place_raw(5, 5, 1);
+    b.place_raw(5, 4, 2);
+    b.place_raw(5, 6, 2);
+    b.place_raw(4, 5, 2);
+    
+    // 白方下 (6,5) 提黑子
+    i32 result = b.place_stone(6, 5, 2);
+    println!("White plays (6,5), captured: {}", result);
+    
+    // 检查提子历史
+    println!("Capture history length: {}", b.get_capture_history_len());
+    if (b.get_capture_history_len() == 1) {
+        println!("[PASS] Capture history recorded");
+    } else {
+        println!("[FAIL] Capture history length wrong: {}", b.get_capture_history_len());
+    }
+    
+    // 获取提子事件
+    i32[9] ev = b.get_capture_event(0);
+    println!("Capture event: move={}, color={}, count={}, pos1=({},{})", 
+        ev[0], ev[1], ev[2], ev[3], ev[4]);
+    
+    // 验证：move_count 应该是 5（4个place_raw + 1个place_stone）
+    if (ev[0] == 5) {
+        println!("[PASS] Move count correct");
+    } else {
+        println!("[FAIL] Move count wrong: {}", ev[0]);
+    }
+    
+    // 验证：color 应该是 2（白方）
+    if (ev[1] == 2) {
+        println!("[PASS] Capturer color correct");
+    } else {
+        println!("[FAIL] Capturer color wrong: {}", ev[1]);
+    }
+    
+    // 验证：count 应该是 1
+    if (ev[2] == 1) {
+        println!("[PASS] Capture count correct");
+    } else {
+        println!("[FAIL] Capture count wrong: {}", ev[2]);
+    }
+    
+    // 验证：位置应该是 (5,5)
+    if (ev[3] == 5 && ev[4] == 5) {
+        println!("[PASS] Capture position correct");
+    } else {
+        println!("[FAIL] Capture position wrong: ({}, {})", ev[3], ev[4]);
+    }
+    
+    // 打印提子历史
+    b.print_capture_history();
+    
+    // 测试 2：多子提子历史
+    println!("\n--- Test 2: Multi-stone capture history ---");
+    Board b2 = new Board();
+    b2.clear();
+    
+    // 构造真正的多子提子局面
+    // 黑子 (5,5)(5,6) 相连，被白子包围，只剩 1 气 (6,6)
+    b2.place_raw(5, 5, 1);
+    b2.place_raw(5, 6, 1);
+    b2.place_raw(5, 4, 2);  // 白
+    b2.place_raw(4, 5, 2);  // 白
+    b2.place_raw(4, 6, 2);  // 白
+    b2.place_raw(6, 5, 2);  // 白
+    // 现在黑子 group (5,5)(5,6) 的气只有 (6,6)
+    
+    // 白方下 (6,6) 提两个黑子
+    i32 result2 = b2.place_stone(6, 6, 2);
+    println!("White plays (6,6), captured: {}", result2);
+    
+    // 检查提子历史
+    println!("Capture history length: {}", b2.get_capture_history_len());
+    if (b2.get_capture_history_len() == 1) {
+        println!("[PASS] Capture history recorded");
+    } else {
+        println!("[FAIL] Capture history length wrong: {}", b2.get_capture_history_len());
+    }
+    
+    // 获取提子事件
+    i32[9] ev2 = b2.get_capture_event(0);
+    println!("Capture event: move={}, color={}, count={}, pos1=({},{}) pos2=({},{})", 
+        ev2[0], ev2[1], ev2[2], ev2[3], ev2[4], ev2[5], ev2[6]);
+    
+    // 验证：count 应该是 2
+    if (ev2[2] == 2) {
+        println!("[PASS] Multi-stone capture count correct");
+    } else {
+        println!("[FAIL] Multi-stone capture count wrong: {}", ev2[2]);
+    }
+    
+    // 打印提子历史
+    b2.print_capture_history();
+    
+    // 测试 3：多次提子
+    println!("\n--- Test 3: Multiple captures ---");
+    Board b3 = new Board();
+    b3.clear();
+    
+    // 第一次提子
+    b3.place_raw(5, 5, 1);
+    b3.place_raw(5, 4, 2);
+    b3.place_raw(5, 6, 2);
+    b3.place_raw(4, 5, 2);
+    b3.place_stone(6, 5, 2);  // 白提黑
+    
+    // 第二次提子
+    b3.place_raw(8, 8, 2);
+    b3.place_raw(8, 7, 1);
+    b3.place_raw(8, 9, 1);
+    b3.place_raw(7, 8, 1);
+    b3.place_stone(9, 8, 1);  // 黑提白
+    
+    println!("Capture history length: {}", b3.get_capture_history_len());
+    if (b3.get_capture_history_len() == 2) {
+        println!("[PASS] Multiple captures recorded");
+    } else {
+        println!("[FAIL] Multiple captures length wrong: {}", b3.get_capture_history_len());
+    }
+    
+    // 打印提子历史
+    b3.print_capture_history();
+}

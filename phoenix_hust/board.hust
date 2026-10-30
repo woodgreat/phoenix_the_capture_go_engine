@@ -51,7 +51,21 @@ public class Board {
     i32 ko_x;
     i32 ko_y;
 
-    // === Transposition Table (TT) fields (2026-10-10) ===
+    // === Capture History (2026-10-30) ===
+    // Records every capture event for accurate state tracking.
+    // Each capture event: [move_count, capturer_color, captured_count, x1, y1, x2, y2, ...]
+    // Max 169 captured stones total, max 50 capture events.
+    // Note: Hust requires explicit initialization for array fields.
+    i32[] capture_move;      // move_count when capture occurred
+    i32[] capture_color;     // color of capturer (1=black, 2=white)
+    i32[] capture_count;     // number of stones captured
+    i32[] capture_x1;        // first captured stone x (-1 if none)
+    i32[] capture_y1;        // first captured stone y
+    i32[] capture_x2;        // second captured stone x (-1 if only 1)
+    i32[] capture_y2;        // second captured stone y
+    i32[] capture_x3;        // third captured stone x (-1 if only 2)
+    i32[] capture_y3;        // third captured stone y
+    i32 capture_history_len = 0;     // number of capture events recorded
     // 256-entry TT with linear probing (4 slots), Zobrist hashing.
     // Resumes the PAUSED TT implementation now that Hust B6-B9 are fixed.
     i32[] tt_hash;    // 256 entries
@@ -75,6 +89,7 @@ public class Board {
         this.rng_seed = 88675123;
         this.search_nodes = 0;
         this.search_budget = 300000;
+        this.capture_history_len = 0;
         // Initialize TT arrays (2026-10-10)
         this.init_search_tables();
     }
@@ -117,6 +132,7 @@ public class Board {
         this.move_count = 0;
         this.ko_x = -1;
         this.ko_y = -1;
+        this.capture_history_len = 0;
         for (i32 i = 0; i < BOARD_SIZE; i++) {
             for (i32 j = 0; j < BOARD_SIZE; j++) {
                 this.grid[i][j] = 0;
@@ -226,6 +242,41 @@ public class Board {
         return (i32)liblist.len();
     }
 
+    // Get all stone positions in the group at (x, y)
+    // Returns array of encoded positions (x * BOARD_SIZE + y)
+    public i32[] get_group_stones(i32 x, i32 y) {
+        i32[] result;
+        i32 color = this.grid[x][y];
+        if (color == 0) {
+            return result;
+        }
+        i32[13][13] visited = {0};
+        i32[] qx;
+        i32[] qy;
+        qx.push(x);
+        qy.push(y);
+        visited[x][y] = 1;
+        i32 head = 0;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        while (head < qx.len() as i32) {
+            i32 cx = qx[head];
+            i32 cy = qy[head];
+            head = head + 1;
+            result.push(cx * BOARD_SIZE + cy);
+            for (i32 d = 0; d < 4; d++) {
+                i32 nx = cx + dxs[d];
+                i32 ny = cy + dys[d];
+                if (this.is_valid(nx, ny) && this.grid[nx][ny] == color && visited[nx][ny] == 0) {
+                    visited[nx][ny] = 1;
+                    qx.push(nx);
+                    qy.push(ny);
+                }
+            }
+        }
+        return result;
+    }
+
     // Remove the whole connected group at (x, y); returns stones removed.
     // Caller must verify the group has no liberties (capture) first.
     // (2026-10-10) B7 fix: use Vec<i32> with head pointer (simplest form)
@@ -296,12 +347,26 @@ public class Board {
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
         i32 opp = this.opponent(color);
+        
+        // Track captured stone positions for history
+        i32[10] captured_x = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+        i32[10] captured_y = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+        i32 captured_idx = 0;
+        
         for (i32 d = 0; d < 4; d++) {
             i32 nx = x + dxs[d];
             i32 ny = y + dys[d];
             if (this.is_valid(nx, ny)) {
                 if (this.grid[nx][ny] == opp) {
                     if (this.count_liberties(nx, ny) == 0) {
+                        // Record positions before removal
+                        i32[] group_stones = this.get_group_stones(nx, ny);
+                        for (i32 i = 0; i < group_stones.len() as i32 && captured_idx < 10; i++) {
+                            i32 code = group_stones[i];
+                            captured_x[captured_idx] = code / BOARD_SIZE;
+                            captured_y[captured_idx] = code - (code / BOARD_SIZE) * BOARD_SIZE;
+                            captured_idx = captured_idx + 1;
+                        }
                         i32 removed = this.remove_group(nx, ny);
                         captured = captured + removed;
                         if (removed == 1) {
@@ -355,8 +420,68 @@ public class Board {
         } else {
             this.white_captures = this.white_captures + captured;
         }
+        
+        // Record capture history (2026-10-30)
+        if (captured > 0) {
+            i32 idx = this.capture_history_len;
+            this.capture_move.push(this.move_count + 1);  // +1 because move_count not yet incremented
+            this.capture_color.push(color);
+            this.capture_count.push(captured);
+            this.capture_x1.push(captured_x[0]);
+            this.capture_y1.push(captured_y[0]);
+            this.capture_x2.push(captured_x[1]);
+            this.capture_y2.push(captured_y[1]);
+            this.capture_x3.push(captured_x[2]);
+            this.capture_y3.push(captured_y[2]);
+            this.capture_history_len = this.capture_history_len + 1;
+        }
+        
         this.move_count = this.move_count + 1;
         return captured;
+    }
+
+    // Get capture history length
+    public i32 get_capture_history_len() {
+        return this.capture_history_len;
+    }
+    
+    // Get capture event at index
+    // Returns: [move_count, capturer_color, captured_count, x1, y1, x2, y2, x3, y3]
+    public i32[9] get_capture_event(i32 idx) {
+        i32[9] result = {-1, -1, -1, -1, -1, -1, -1, -1, -1};
+        if (idx < 0 || idx >= this.capture_history_len) {
+            return result;
+        }
+        result[0] = this.capture_move[idx as usize];
+        result[1] = this.capture_color[idx as usize];
+        result[2] = this.capture_count[idx as usize];
+        result[3] = this.capture_x1[idx as usize];
+        result[4] = this.capture_y1[idx as usize];
+        result[5] = this.capture_x2[idx as usize];
+        result[6] = this.capture_y2[idx as usize];
+        result[7] = this.capture_x3[idx as usize];
+        result[8] = this.capture_y3[idx as usize];
+        return result;
+    }
+    
+    // Print capture history
+    public void print_capture_history() {
+        if (this.capture_history_len == 0) {
+            println!("No captures recorded");
+            return;
+        }
+        println!("Capture History ({} events):", this.capture_history_len);
+        for (i32 i = 0; i < this.capture_history_len; i++) {
+            i32[9] ev = this.get_capture_event(i);
+            print!("  Move {}: ", ev[0]);
+            if (ev[1] == 1) {
+                print!("Black");
+            } else {
+                print!("White");
+            }
+            println!(" captured {} stones at ({},{}) ({},{}) ({},{})", 
+                ev[2], ev[3], ev[4], ev[5], ev[6], ev[7], ev[8]);
+        }
     }
 
     // Captured-stone count for a side (1 = black, 2 = white)
