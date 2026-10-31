@@ -22,6 +22,73 @@ use gtp;
 use ai;
 use debug;
 use ai_env_datatypes;
+use RUST.TIME.SYSTEMTIME;
+
+// 2026-10-31: Convert Unix time value to formatted timestamp string
+// Format: YYYYMMDD_HHMM (UTC)
+String format_time_value(i64 secs) {
+    // Calculate minutes, hours, days
+    i64 mins = secs / 60;
+    i64 hours = mins / 60;
+    i64 days = hours / 24;
+    
+    // Calculate remaining hours and minutes
+    i64 rem_hours = hours % 24;
+    i64 rem_mins = mins % 60;
+    
+    // Calculate year, month, day (with leap year support)
+    i64 year = 1970;
+    i64 remaining_days = days;
+    
+    // Days in each month (non-leap year)
+    i32[12] month_days = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    
+    // Calculate year with leap year support
+    while (remaining_days >= 365) {
+        // Check if current year is a leap year
+        bool is_leap = false;
+        if (year % 4 == 0) {
+            if (year % 100 != 0 || year % 400 == 0) {
+                is_leap = true;
+            }
+        }
+        
+        i64 days_in_year = 365;
+        if (is_leap) {
+            days_in_year = 366;
+        }
+        
+        if (remaining_days >= days_in_year) {
+            remaining_days = remaining_days - days_in_year;
+            year = year + 1;
+        } else {
+            break;
+        }
+    }
+    
+    // Calculate month and day
+    i32 month = 1;
+    i64 day = remaining_days;  // 2026-10-31: day starts from 0
+    
+    // Subtract days for each month until we find the right month
+    i32 idx = 0;
+    while (idx < 12) {
+        i64 dim = month_days[idx] as i64;
+        if (day >= dim) {
+            day = day - dim;
+            month = month + 1;
+            idx = idx + 1;
+        } else {
+            break;
+        }
+    }
+    // day is now 0-based day of month, convert to 1-based
+    day = day + 1;
+    
+    // Format: YYYYMMDD_HHMM
+    String result = format!("{:04}{:02}{:02}_{:02}{:02}", year as i32, month, day as i32, rem_hours as i32, rem_mins as i32);
+    return result;
+}
 
 void main() {
     // CLI parsing: GNU Go style switches
@@ -227,31 +294,31 @@ void main() {
             println!("  clear_board / cb       - clear board");
             println!("");
             println!("Moves:");
-            println!("  play <color> <coord>   - play a stone (e.g. play black F7)");
-            println!("  pb <coord> / pw <coord> - play black/white");
-            println!("  genmove <color>       - AI move (genmove black)");
-            println!("  gb / gw                - AI move black/white");
-            println!("  undo                   - undo last move");
+            println!("  play <color> <coord>    - play a stone (e.g. play black F7)");
+            println!("  pb / pw <coord>         - play black/white (简写)");
+            println!("  genmove <color>         - AI move (e.g. genmove black)");
+            println!("  gb / gw                 - AI move black/white (简写)");
+            println!("  undo                    - undo last move");
             println!("");
             println!("Display:");
-            println!("  showboard / sb         - show board");
-            println!("  show captures / sc     - show capture counts");
-            println!("  print_moves / pm       - print move history");
-            println!("  move_history           - alias for print_moves");
+            println!("  sb / showboard          - show board (简写)");
+            println!("  sc / show captures      - show capture counts (简写)");
+            println!("  pm / print_moves        - print move history (简写)");
+            println!("  move_history            - alias for print_moves");
             println!("");
             println!("Game info:");
-            println!("  result / rw            - show game result");
-            println!("  board_status           - show board status");
-            println!("  wood_ai_level          - show/set AI level");
-            println!("  wood_captures          - show capture counts");
-            println!("  wood_rules             - show rules version");
+            println!("  rw / result             - show game result (简写)");
+            println!("  board_status            - show board status");
+            println!("  wood_ai_level           - show/set AI level");
+            println!("  wood_captures           - show capture counts");
+            println!("  wood_rules              - show rules version");
             println!("");
             println!("Other:");
-            println!("  list_commands          - list all GTP commands");
-            println!("  known_command <cmd>    - check if command exists");
-            println!("  export_sgf             - export game as SGF");
-            println!("  quit / exit            - exit program");
-            println!("  help                   - show this help");
+            println!("  list_commands           - list all GTP commands");
+            println!("  known_command <cmd>     - check if command exists");
+            println!("  export_sgf              - export game as SGF");
+            println!("  quit / exit             - exit program");
+            println!("  help                    - show this help");
         } else if (cmd == "list_commands") {
             println!("={}protocol_version", p);
             println!("name");
@@ -533,11 +600,10 @@ void main() {
                 }
             }
         } else if (cmd == "export_sgf") {
-            // Export game in SGF format (prepared for future file export)
-            // Note: Using simple text format to avoid Hust bracket parsing issues
-            println!("=SGF export ({} moves):", move_count);
-            println!("FF=4 GM=1 SZ=13 RU=WoodCaptureGo");
-            println!("PB-Black PW-White");
+            // Export game in SGF format to file
+            // Default: write to current executable directory
+            // Build SGF content using format! to avoid Hust string literal issues
+            String sgf_content = format!("(;FF[4]GM[1]SZ[13]RU[WoodCaptureGo]PB[Black]PW[White]");
             for (i32 i = 0; i < move_count; i++) {
                 i32 base = i * 4;
                 i32 mc = move_history[base];
@@ -547,10 +613,23 @@ void main() {
                 if (mc != 1) {
                     color_str = "W";
                 }
-                // Use coordinate conversion function
                 String sgf_coord = xy_to_sgf(mx, my);
-                println!("{}[{}]", color_str, sgf_coord);
+                sgf_content = format!("{};{}[{}]", sgf_content, color_str, sgf_coord);
             }
+            sgf_content = sgf_content + ")";
+            
+            // Generate filename with timestamp
+            // 2026-10-31: Convert time value to formatted timestamp
+            SystemTime now = SystemTime::now();
+            i64 time_value = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+            String timestamp = format_time_value(time_value);
+            String filename = format!("phoenix_game_{}_{}.sgf", move_count, timestamp);
+            
+            // Write to file
+            std::fs::write(filename.clone(), sgf_content.clone());
+            
+            println!("={}SGF exported to file: {}", p, filename);
+            println!("{} moves exported", move_count);
             std::io::Write::flush(&mut std::io::stdout());
         } else if (cmd == "wood_ai_level") {
             // Query with no argument, set when a level follows.
