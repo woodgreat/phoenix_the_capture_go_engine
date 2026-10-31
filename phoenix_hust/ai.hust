@@ -1,7 +1,7 @@
 // ai.hust - AI strategy layer (shape-interface pattern, r44)
 //
 // ALGORITHM FAMILY: SCM A.I - Simple Counting Method.
-//   Chinese: 简洁数势力法. It counts the EFFECTIVENESS OF STONES (势 = 子的
+//   Chinese: 简洁数势法. It counts the EFFECTIVENESS OF STONES (势 = 子的
 //   效能), not merely their number: a stone is worth more where it has
 //   liberties, connections and eye potential, less where it is surrounded
 //   and short of air. The method evaluates statically in layers and does

@@ -22,7 +22,7 @@ use gtp;
 use ai;
 use debug;
 use ai_env_datatypes;
-use RUST.TIME.SYSTEMTIME;
+use RUST.time.SystemTime;
 
 // 2026-10-31: Convert Unix time value to formatted timestamp string
 // Format: YYYYMMDD_HHMM (UTC)
@@ -623,7 +623,16 @@ void main() {
             SystemTime now = SystemTime::now();
             i64 time_value = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
             String timestamp = format_time_value(time_value);
-            String filename = format!("phoenix_game_{}_{}.sgf", move_count, timestamp);
+            
+            // Check if user specified custom filename
+            String filename;
+            if (a1 != "") {
+                // User specified filename: export_sgf mygame
+                filename = format!("{}.sgf", a1);
+            } else {
+                // Default filename with timestamp
+                filename = format!("phoenix_game_{}_{}.sgf", move_count, timestamp);
+            }
             
             // Write to file
             std::fs::write(filename.clone(), sgf_content.clone());
