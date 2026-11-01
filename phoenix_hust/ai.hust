@@ -375,8 +375,27 @@ public class Level2 implements MoveGenerator {
                         }
                     }
                     if (alive && !(is_ko && cap == 1)) {
-                        if (cap > best_captures) {
-                            best_captures = cap;
+                        // Level 2 (对标 Level 6): depth-1 minimax evaluation
+                        b2.set(x, y, color);
+                        for (i32 d = 0; d < 4; d++) {
+                            i32 nx = x + dxs[d];
+                            i32 ny = y + dys[d];
+                            if (b2.is_valid(nx, ny)) {
+                                if (b2.get(nx, ny) == opp) {
+                                    if (b2.count_liberties(nx, ny) == 0) {
+                                        b2.remove_group(nx, ny);
+                                    }
+                                }
+                            }
+                        }
+                        i32 val = b2.minimax(1, opp, color, -999999, 999999);
+                        for (i32 i = 0; i < 13; i++) {
+                            for (i32 j = 0; j < 13; j++) {
+                                b2.set(i, j, saved_grid[i][j]);
+                            }
+                        }
+                        if (val > best_captures) {
+                            best_captures = val;
                             best_enc = x * 13 + y;
                         }
                     }
@@ -674,7 +693,7 @@ public class Level4 implements MoveGenerator {
                     }
                 }
             }
-            i32 val = b2.minimax(0, opp, color, -999999, 999999);
+            i32 val = b2.minimax(2, opp, color, -999999, 999999);
             for (i32 i = 0; i < 13; i++) {
                 for (i32 j = 0; j < 13; j++) {
                     b2.set(i, j, snap[i][j]);
@@ -804,7 +823,7 @@ public class Level5 implements MoveGenerator {
                                     }
                                 }
                             }
-                            i32 val = b2.minimax(2, opp, color, -999999, 999999);
+                            i32 val = b2.minimax(3, opp, color, -999999, 999999);
                             for (i32 i = 0; i < 13; i++) {
                                 for (i32 j = 0; j < 13; j++) {
                                     b2.set(i, j, snap[i][j]);
@@ -907,7 +926,7 @@ public class Level5 implements MoveGenerator {
                     bool alive = b2.count_liberties(x, y) > 0;
                     i32 val = -999999;
                     if (alive && !(is_ko && cap == 1)) {
-                        val = b2.minimax(2, opp, color, -999999, 999999);
+                        val = b2.minimax(3, opp, color, -999999, 999999);
                     }
                     for (i32 i = 0; i < 13; i++) {
                         for (i32 j = 0; j < 13; j++) {
@@ -1010,7 +1029,7 @@ public class Level6 implements MoveGenerator {
                     bool alive = b2.count_liberties(x, y) > 0;
                     i32 val = -999999;
                     if (alive && !(is_ko && cap == 1)) {
-                        val = b2.minimax(3, opp, color, -999999, 999999);
+                        val = b2.minimax(4, opp, color, -999999, 999999);
                     }
                     for (i32 i = 0; i < 13; i++) {
                         for (i32 j = 0; j < 13; j++) {
@@ -1072,7 +1091,7 @@ public class Level7 implements MoveGenerator {
         i32[4] dys = {1, -1, 0, 0};
         // iterative deepening: 2..5 ply
         i32 best_enc = -1;
-        for (i32 dd = 2; dd <= 5; dd++) {
+        for (i32 dd = 4; dd <= 7; dd++) {
             best_enc = -1;
             i32 best_val = -999999;
             b2.start_search(300000);
@@ -1164,7 +1183,7 @@ public class Level8 implements MoveGenerator {
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
         i32 best_enc = -1;
-        for (i32 dd = 2; dd <= 6; dd++) {
+        for (i32 dd = 5; dd <= 8; dd++) {
             best_enc = -1;
             i32 best_val = -999999;
             b2.start_search(500000);
@@ -1256,7 +1275,7 @@ public class Level9 implements MoveGenerator {
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
         i32 best_enc = -1;
-        for (i32 dd = 2; dd <= 6; dd++) {
+        for (i32 dd = 6; dd <= 9; dd++) {
             best_enc = -1;
             i32 best_val = -999999;
             b2.start_search(800000);
@@ -1349,7 +1368,7 @@ public class Level10 implements MoveGenerator {
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
         i32 best_enc = -1;
-        for (i32 dd = 2; dd <= 7; dd++) {
+        for (i32 dd = 7; dd <= 10; dd++) {
             best_enc = -1;
             i32 best_val = -999999;
             b2.start_search(1000000);
