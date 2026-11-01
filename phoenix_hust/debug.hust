@@ -3,7 +3,7 @@
 // For now: hardcode DEBUG_ON to enable/disable.
 
 bool DEBUG_ON = false;  // DEBUG MODE DISABLED
-i32 DEBUG_LEVEL = 1;
+i32 DEBUG_LEVEL = 3;
 
 public void debug_log(i32 level, &str tag, &str msg) {
     if (DEBUG_ON && DEBUG_LEVEL >= level) {
