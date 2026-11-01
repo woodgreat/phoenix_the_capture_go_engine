@@ -2,7 +2,7 @@
 // No global state; control via compile-time flag or pass bool around.
 // For now: hardcode DEBUG_ON to enable/disable.
 
-bool DEBUG_ON = false;  // set true only when debugging
+bool DEBUG_ON = false;  // DEBUG MODE DISABLED
 i32 DEBUG_LEVEL = 1;
 
 public void debug_log(i32 level, &str tag, &str msg) {

@@ -57,6 +57,8 @@ public class Level1 implements MoveGenerator {
         i32 opp = b2.opponent(color);
         i32[169] capture_moves = {0};
         i32 n_cap = 0;
+        i32[169] defend_moves = {0};
+        i32 n_def = 0;
         i32[169] empty_moves = {0};
         i32 n_empty = 0;
         i32[4] dxs = {0, 0, 1, -1};
@@ -68,6 +70,19 @@ public class Level1 implements MoveGenerator {
                 saved_grid[i][j] = b2.get(i, j);
             }
         }
+        // Step 1: detect own groups in atari (1 liberty)
+        bool has_atari = false;
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (b2.get(x, y) == color) {
+                    if (b2.count_liberties(x, y) == 1) {
+                        has_atari = true;
+                        debug_log_i32(1, "L1", "atari group at", x * 13 + y);
+                    }
+                }
+            }
+        }
+        debug_log_i32(1, "L1", "has_atari", has_atari as i32);
         for (i32 x = 0; x < 13; x++) {
             for (i32 y = 0; y < 13; y++) {
                 if (b2.get(x, y) == 0) {
@@ -75,6 +90,7 @@ public class Level1 implements MoveGenerator {
                     // try the placement virtually
                     b2.set(x, y, color);
                     bool captures = false;
+                    bool defends = false;
                     for (i32 d = 0; d < 4; d++) {
                         i32 nx = x + dxs[d];
                         i32 ny = y + dys[d];
@@ -87,6 +103,34 @@ public class Level1 implements MoveGenerator {
                         }
                     }
                     bool alive = b2.count_liberties(x, y) > 0;
+                    // Check if this move defends an atari group
+                    if (has_atari && alive) {
+                        // Check if any neighboring own group WAS in atari (1 liberty) before this move
+                        // and now has more liberties (because we placed a stone adjacent to it)
+                        for (i32 d = 0; d < 4; d++) {
+                            i32 nx = x + dxs[d];
+                            i32 ny = y + dys[d];
+                            if (b2.is_valid(nx, ny)) {
+                                if (b2.get(nx, ny) == color) {
+                                    // This move connects to an own group
+                                    // Check if it increases liberties from atari
+                                    // First check: was this group in atari before our move?
+                                    // We know has_atari is true, so some group is in atari
+                                    // Check if this specific group now has > 1 liberty
+                                    // and would have had 1 liberty without our move
+                                    if (b2.count_liberties(nx, ny) > 1) {
+                                        // Temporarily remove our stone to check original liberty count
+                                        b2.set(x, y, 0);
+                                        i32 orig_libs = b2.count_liberties(nx, ny);
+                                        b2.set(x, y, color);
+                                        if (orig_libs == 1) {
+                                            defends = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // Restore full board state (including captured stones)
                     for (i32 i = 0; i < 13; i++) {
                         for (i32 j = 0; j < 13; j++) {
@@ -116,13 +160,24 @@ public class Level1 implements MoveGenerator {
                                 n_cap = n_cap + 1;
                             }
                         }
+                        if (defends) {
+                            defend_moves[n_def] = enc;
+                            n_def = n_def + 1;
+                        }
                     }
                 }
             }
         }
+        debug_log_i32(1, "L1", "n_cap", n_cap);
+        debug_log_i32(1, "L1", "n_def", n_def);
+        debug_log_i32(1, "L1", "n_empty", n_empty);
         i32 mv = -1;
         if (n_cap > 0) {
             mv = capture_moves[b2.rand_below(n_cap)];
+        } else if (n_def > 0) {
+            // Priority 2: defend atari groups
+            mv = defend_moves[b2.rand_below(n_def)];
+            debug_log_i32(1, "L1", "defending", mv);
         } else if (n_empty > 0) {
             mv = empty_moves[b2.rand_below(n_empty)];
         }
