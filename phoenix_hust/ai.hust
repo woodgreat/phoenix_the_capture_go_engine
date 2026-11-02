@@ -180,6 +180,22 @@ public class Level1 implements MoveGenerator {
             debug_log_i32(1, "L1", "defending", mv);
         } else if (n_empty > 0) {
             mv = empty_moves[b2.rand_below(n_empty)];
+        } else {
+            // Wood rules forbid passing: fill any empty point (random)
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
+                    }
+                }
+            }
+            if (n_all > 0) {
+                mv = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L1", "filling random", mv);
+            }
         }
         if (mv < 0) {
             // no legal point at all (not a pass): Wood rules forbid passing,
@@ -403,9 +419,25 @@ public class Level2 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            this.last_x = -1;
-            this.last_y = -1;
-            return b2;
+            // Wood rules forbid passing: fill any empty point (random)
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
+                    }
+                }
+            }
+            if (n_all > 0) {
+                best_enc = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L2", "filling random", best_enc);
+            } else {
+                this.last_x = -1;
+                this.last_y = -1;
+                return b2;
+            }
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
@@ -524,9 +556,25 @@ public class Level3 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            this.last_x = -1;
-            this.last_y = -1;
-            return b2;
+            // Wood rules forbid passing: fill any empty point (random)
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
+                    }
+                }
+            }
+            if (n_all > 0) {
+                best_enc = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L3", "filling random", best_enc);
+            } else {
+                this.last_x = -1;
+                this.last_y = -1;
+                return b2;
+            }
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
@@ -705,7 +753,25 @@ public class Level4 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            best_enc = cand_enc[0];
+            // Wood rules forbid passing: fill any empty point (random)
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
+                    }
+                }
+            }
+            if (n_all > 0) {
+                best_enc = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L4", "filling random", best_enc);
+            } else {
+                this.last_x = -1;
+                this.last_y = -1;
+                return b2;
+            }
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
@@ -946,21 +1012,26 @@ public class Level5 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            debug_log(1, "L5", "ERROR: no legal move found!");
-            debug_log_i32(1, "L5", "color", color);
-            b2.print_board();
-            i32 legal = 0;
-            for (i32 lx = 0; lx < 13; lx++) {
-                for (i32 ly = 0; ly < 13; ly++) {
-                    if (b2.get(lx, ly) == 0) {
-                        legal = legal + 1;
+            // Wood rules forbid passing: fill any empty point (random)
+            debug_log(1, "L5", "no best move, filling random");
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
                     }
                 }
             }
-            debug_log_i32(1, "L5", "empty_points", legal);
-            this.last_x = -1;
-            this.last_y = -1;
-            return b2;
+            if (n_all > 0) {
+                best_enc = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L5", "filling random", best_enc);
+            } else {
+                this.last_x = -1;
+                this.last_y = -1;
+                return b2;
+            }
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
@@ -1044,9 +1115,25 @@ public class Level6 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            this.last_x = -1;
-            this.last_y = -1;
-            return b2;
+            // Wood rules forbid passing: fill any empty point (random)
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
+                    }
+                }
+            }
+            if (n_all > 0) {
+                best_enc = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L5", "filling random", best_enc);
+            } else {
+                this.last_x = -1;
+                this.last_y = -1;
+                return b2;
+            }
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
@@ -1140,9 +1227,25 @@ public class Level7 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            this.last_x = -1;
-            this.last_y = -1;
-            return b2;
+            // Wood rules forbid passing: fill any empty point (random)
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
+                    }
+                }
+            }
+            if (n_all > 0) {
+                best_enc = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L5", "filling random", best_enc);
+            } else {
+                this.last_x = -1;
+                this.last_y = -1;
+                return b2;
+            }
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
@@ -1232,9 +1335,25 @@ public class Level8 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            this.last_x = -1;
-            this.last_y = -1;
-            return b2;
+            // Wood rules forbid passing: fill any empty point (random)
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
+                    }
+                }
+            }
+            if (n_all > 0) {
+                best_enc = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L5", "filling random", best_enc);
+            } else {
+                this.last_x = -1;
+                this.last_y = -1;
+                return b2;
+            }
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
@@ -1324,9 +1443,25 @@ public class Level9 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            this.last_x = -1;
-            this.last_y = -1;
-            return b2;
+            // Wood rules forbid passing: fill any empty point (random)
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
+                    }
+                }
+            }
+            if (n_all > 0) {
+                best_enc = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L5", "filling random", best_enc);
+            } else {
+                this.last_x = -1;
+                this.last_y = -1;
+                return b2;
+            }
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
@@ -1417,9 +1552,25 @@ public class Level10 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            this.last_x = -1;
-            this.last_y = -1;
-            return b2;
+            // Wood rules forbid passing: fill any empty point (random)
+            i32[169] all_empty = {0};
+            i32 n_all = 0;
+            for (i32 x = 0; x < 13; x++) {
+                for (i32 y = 0; y < 13; y++) {
+                    if (b2.get(x, y) == 0) {
+                        all_empty[n_all] = x * 13 + y;
+                        n_all = n_all + 1;
+                    }
+                }
+            }
+            if (n_all > 0) {
+                best_enc = all_empty[b2.rand_below(n_all)];
+                debug_log_i32(1, "L5", "filling random", best_enc);
+            } else {
+                this.last_x = -1;
+                this.last_y = -1;
+                return b2;
+            }
         }
         i32 mx = best_enc / 13;
         i32 my = best_enc - mx * 13;
