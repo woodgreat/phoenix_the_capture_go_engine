@@ -2,6 +2,9 @@
 phoenix_hust/phoenix
 *.exe
 
+# Distribution directory (build output)
+phoenix_hust/dist/
+
 # Rust build directories
 target/
 build/
