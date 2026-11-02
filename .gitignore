@@ -3,7 +3,12 @@ phoenix_hust/phoenix
 *.exe
 
 # Distribution directory (build output)
-phoenix_hust/dist/
+# 保留目录结构，不提交编译产物
+# Keep directory structure, don't commit build artifacts
+# 排除所有文件，但保留目录和 .gitkeep
+phoenix_hust/dist/**/**
+!phoenix_hust/dist/**/
+!phoenix_hust/dist/**/.gitkeep
 
 # Rust build directories
 target/
