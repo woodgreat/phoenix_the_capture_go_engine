@@ -1,0 +1,9 @@
+# Windows 交叉编译配置
+# 用法: cargo build --release --config configs/config-windows.toml
+# 注意: 需要安装 x86_64-pc-windows-gnu target 和 MinGW 链接器
+
+[build]
+target = "x86_64-pc-windows-gnu"
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"

@@ -1,0 +1,8 @@
+# Linux 编译配置
+# 用法: cargo build --release --config configs/config-linux.toml
+
+[build]
+target = "x86_64-unknown-linux-gnu"
+
+[target.x86_64-unknown-linux-gnu]
+linker = "cc"
