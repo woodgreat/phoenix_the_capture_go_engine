@@ -98,13 +98,19 @@ public String wood_to_sgf(i32 x, i32 y) {
 }
 
 // Convert Wood board array to SGF coordinate list
-// Returns all non-empty points as SGF coordinates
-public String[] wood_board_to_sgf_list(i32[] board) {
-    String[] coords;
+// Returns all non-empty points as SGF coordinates (comma-separated)
+// 2026-11-03: Changed from String[] to String to avoid Hust dynamic array limitation
+public String wood_board_to_sgf_list(i32[] board) {
+    String coords = "";
+    bool first = true;
     for (i32 x = 0; x < 13; x++) {
         for (i32 y = 0; y < 13; y++) {
             if (board[x * 13 + y] != 0) {
-                coords.push(wood_to_sgf(x, y));
+                if (!first) {
+                    coords = coords + ",";
+                }
+                coords = coords + &wood_to_sgf(x, y);
+                first = false;
             }
         }
     }
@@ -216,7 +222,8 @@ public i32[] gtp_to_wood(String gtp) {
     // Parse number part (could be 1-2 digits)
     String num_str = "";
     for (i32 i = 1; i < gtp.len(); i++) {
-        num_str = num_str + gtp.chars().nth(i).unwrap();
+        char c = gtp.chars().nth((usize)i).unwrap();
+        num_str = num_str + &c.to_string();
     }
     i32 gtp_y = str_to_i32(num_str);
     
@@ -314,7 +321,7 @@ public i32[] wood_neighbors(i32 x, i32 y) {
 public void wood_print(i32[] board) {
     println!("   A B C D E F G H I J K L M");
     for (i32 y = 12; y >= 0; y--) {
-        String row = format!("{:2d} ", y + 1);
+        String row = format!("{:>2} ", y + 1);
         for (i32 x = 0; x < 13; x++) {
             i32 v = board[x * 13 + y];
             if (v == 0) { row = row + ". "; }
@@ -329,7 +336,7 @@ public void wood_print(i32[] board) {
 public void sgf_print(i32[] sgf_board) {
     println!("   A B C D E F G H I J K L M");
     for (i32 sgf_y = 0; sgf_y < 13; sgf_y++) {
-        String row = format!("{:2d} ", 13 - sgf_y);
+        String row = format!("{:>2} ", 13 - sgf_y);
         for (i32 x = 0; x < 13; x++) {
             i32 v = sgf_board[sgf_y * 13 + x];
             if (v == 0) { row = row + ". "; }

@@ -22,6 +22,7 @@ use gtp;
 use ai;
 use debug;
 use ai_env_datatypes;
+use coordinate;
 use RUST.time.SystemTime;
 
 // Internal game state (engine internal use only)
