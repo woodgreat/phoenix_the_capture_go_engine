@@ -24,7 +24,7 @@ genmove white"
     fi
 done
 COMMANDS="$COMMANDS
-final_score
+r
 result
 quit"
 
@@ -33,14 +33,14 @@ echo "--- Running game (Black L$BLACK_LEVEL vs White L$WHITE_LEVEL) ---"
 RESULT=$(echo "$COMMANDS" | timeout 30 ./phoenix --level $BLACK_LEVEL 2>&1)
 
 # Extract final score and result
-FINAL_SCORE=$(echo "$RESULT" | grep -A1 "final_score" | tail -1)
+FINAL_SCORE=$(echo "$RESULT" | grep -A1 "r" | tail -1)
 GAME_RESULT=$(echo "$RESULT" | grep -A1 "^result" | tail -1)
 
 echo "Final score: $FINAL_SCORE"
 echo "Game result: $GAME_RESULT"
 echo ""
 
-# Determine winner from final_score (format: B+N or W+N)
+# Determine winner from r (format: B+N or W+N)
 if echo "$FINAL_SCORE" | grep -q "B+"; then
     echo "Winner: Black (Level $BLACK_LEVEL)"
 elif echo "$FINAL_SCORE" | grep -q "W+"; then
