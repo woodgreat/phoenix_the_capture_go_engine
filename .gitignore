@@ -15,3 +15,10 @@ target/
 build/
 # Hust probe working dirs
 io_probe/
+
+# Test/experiment files (moved to record/)
+phoenix_hust/selfplay_*.py
+phoenix_hust/selfplay_*.sh
+phoenix_hust/test_*.hust
+phoenix_hust/*.sgf
+phoenix_hust/record/
