@@ -102,6 +102,8 @@ void main() {
     String arg1 = std::env::args().nth(1).unwrap_or(String::new());
     String arg2 = std::env::args().nth(2).unwrap_or(String::new());
     String arg3 = std::env::args().nth(3).unwrap_or(String::new());
+    String arg4 = std::env::args().nth(4).unwrap_or(String::new());
+    String arg5 = std::env::args().nth(5).unwrap_or(String::new());
     bool gtp_mode = false;
     bool show_board_flag = false;
     i32 startup_level = 1;
@@ -127,10 +129,16 @@ void main() {
     if (arg1 == "--show-board" || arg2 == "--show-board" || arg3 == "--show-board") {
         show_board_flag = true;
     }
+    // 2026-11-04 fix: scan every position for --level so the flag works
+    // in any order after the executable name (e.g. "--mode gtp --level 6").
     if (arg1 == "--level") {
         startup_level = str_to_i32(arg2.clone());
     } else if (arg2 == "--level") {
         startup_level = str_to_i32(arg3.clone());
+    } else if (arg3 == "--level") {
+        startup_level = str_to_i32(arg4.clone());
+    } else if (arg4 == "--level") {
+        startup_level = str_to_i32(arg5.clone());
     }
     if (startup_level < 1 || startup_level > 10) {
         startup_level = 1;
@@ -159,9 +167,9 @@ void main() {
     i32 move_count = 0;
     
     // 2026-11-03: Separate AI objects for black and white
-    // Default level 1 for both; use salb/salw to set independently
-    i32 ai_level_black = 1;
-    i32 ai_level_white = 1;
+    // 2026-11-04 fix: --level N now sets both black and white AI levels
+    i32 ai_level_black = startup_level;
+    i32 ai_level_white = startup_level;
     AIWrapper ai_black = create_ai(ai_level_black);
     AIWrapper ai_white = create_ai(ai_level_white);
     // Legacy single AI object (for backward compatibility with set ai level)

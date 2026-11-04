@@ -1121,6 +1121,13 @@ public class Level6 implements MoveGenerator {
         b2.start_search(400000);
         for (i32 x = 0; x < 13; x++) {
             for (i32 y = 0; y < 13; y++) {
+                // 2026-11-04 fix: stop scanning once the search budget is spent.
+                // Without this check the outer loop keeps calling minimax for every
+                // remaining empty point; each call pays the full snapshot/restore
+                // cost even though minimax immediately bails via the budget check.
+                if (b2.search_nodes > b2.search_budget) {
+                    break;
+                }
                 if (b2.get(x, y) == 0) {
                     bool is_ko = b2.is_ko_point(x, y);
                     i32[13][13] snap = {0};
@@ -1157,6 +1164,9 @@ public class Level6 implements MoveGenerator {
                         best_enc = x * 13 + y;
                     }
                 }
+            }
+            if (b2.search_nodes > b2.search_budget) {
+                break;
             }
         }
         if (best_enc < 0) {
