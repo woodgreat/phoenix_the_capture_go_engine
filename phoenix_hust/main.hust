@@ -327,7 +327,8 @@ void main() {
                 || a1 == "ucb" || a1 == "use_clean_board"
                 || a1 == "usb" || a1 == "use_set_board"
                 || a1 == "pm" || a1 == "print_moves" || a1 == "move_history"
-                || a1 == "export_sgf" || a1 == "es") {
+                || a1 == "export_sgf" || a1 == "es"
+                || a1 == "export_wsgf" || a1 == "ew") {
                 k = "true";
             }
             println!("={}{}", p, k);
@@ -364,6 +365,7 @@ void main() {
             println!("  list_commands           - list all GTP commands");
             println!("  known_command <cmd>     - check if command exists");
             println!("  export_sgf              - export game as SGF");
+            println!("  export_wsgf             - export game as Wood SGF (Wood coordinates)");
             println!("  quit / exit             - exit program");
             println!("  help                    - show this help");
         } else if (cmd == "list_commands") {
@@ -595,23 +597,17 @@ void main() {
             } else {
                 println!("?{}unknown command", p);
             }
-        } else if (cmd == "board_status") {
-            // Machine-readable game status (internal state)
-            i32 state = b.get_game_over_state();
-            if (state == 1) {
-                println!("={}1 B", p);
-            } else if (state == 2) {
-                println!("={}1 W", p);
-            } else {
-                println!("={}0", p);
-            }
         } else if (cmd == "result") {
             // Human-readable game status (internal state)
+            // 2026-11-04: Show winning move number in parentheses
             i32 state = b.get_game_over_state();
             if (state == 1) {
-                println!("={}black", p);
+                println!("={}black ({})", p, b.get_game_over_move());
             } else if (state == 2) {
-                println!("={}white", p);
+                println!("={}white ({})", p, b.get_game_over_move());
+            } else if (state == 3) {
+                // 2026-11-04: Draw -> White wins (Wood Capture Go rule)
+                println!("={}draw ({})", p, b.get_game_over_move());
             } else {
                 println!("={}gaming", p);
             }
@@ -645,6 +641,68 @@ void main() {
                     }
                 }
             }
+        } else if (cmd == "export_wsgf" || cmd == "ew") {
+            // Export game in Wood SGF format to file
+            // 
+            // Wood SGF is a variant of SGF that preserves Wood internal coordinates
+            // without y-axis flipping. This makes it easier to analyze games using
+            // Wood's native coordinate system (x=0-12, y=0-12, where y=0 is row 1/bottom).
+            //
+            // Key differences from standard SGF (export_sgf):
+            // - Standard SGF: y is flipped (sgf_y = 12 - wood_y)
+            // - Wood SGF: y stays the same (woodsgf_y = wood_y)
+            //
+            // Coordinate mapping examples:
+            // - Wood (0, 0) = A1 (bottom-left) -> Wood SGF "aa"
+            // - Wood (12, 12) = M13 (top-right) -> Wood SGF "mm"
+            // - Wood (5, 5) = F6 -> Wood SGF "ff"
+            //
+            // Use case: When analyzing games with Wood tools or debugging coordinate
+            // conversion issues, Wood SGF preserves the original Wood coordinates,
+            // eliminating confusion from y-axis flipping.
+            //
+            // Usage: export_wsgf [filename]
+            //   - export_wsgf mygame -> writes mygame_wood.wsgf
+            //   - export_wsgf (no arg) -> writes phoenix_game_<moves>_<timestamp>_wood.wsgf
+            //
+            // Created: 2026-11-04
+            // Author: 龙小虾 🦞
+            
+            String sgf_content = format!("(;FF[4]GM[1]SZ[13]RU[WoodCaptureGo]PB[Black]PW[White]");
+            for (i32 i = 0; i < move_count; i++) {
+                i32 base = i * 4;
+                i32 mc = move_history[base];
+                i32 mx = move_history[base + 1];
+                i32 my = move_history[base + 2];
+                String color_str = "B";
+                if (mc != 1) {
+                    color_str = "W";
+                }
+                // Use Wood SGF conversion (no y-flip)
+                String sgf_coord = wood_to_woodsgf(mx, my);
+                sgf_content = format!("{};{}[{}]", sgf_content, color_str, sgf_coord);
+            }
+            sgf_content = sgf_content + ")";
+            
+            // Generate filename with timestamp
+            SystemTime now = SystemTime::now();
+            i64 time_value = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+            String timestamp = format_time_value(time_value);
+            
+            // Check if user specified custom filename
+            String filename;
+            if (a1 != "") {
+                filename = format!("{}_wood.wsgf", a1);
+            } else {
+                filename = format!("phoenix_game_{}_{}_wood.wsgf", move_count, timestamp);
+            }
+            
+            // Write to file
+            std::fs::write(filename.clone(), sgf_content.clone());
+            
+            println!("={}Wood SGF exported to file: {}", p, filename);
+            println!("{} moves exported", move_count);
+            std::io::Write::flush(&mut std::io::stdout());
         } else if (cmd == "export_sgf") {
             // Export game in SGF format to file
             // Default: write to current executable directory
@@ -844,13 +902,17 @@ void main() {
                     }
                     if (b.black_captures >= 6) {
                         b.set_game_over_state(1);
+                        b.set_game_over_move(move_count);
                     } else if (b.white_captures >= 5) {
                         b.set_game_over_state(2);
+                        b.set_game_over_move(move_count);
                     } else if (empties == 0) {
                         if (b.black_captures > b.white_captures) {
                             b.set_game_over_state(1);
+                            b.set_game_over_move(move_count);
                         } else {
                             b.set_game_over_state(2);
+                            b.set_game_over_move(move_count);
                         }
                     } else {
                         b.set_game_over_state(0);
@@ -859,7 +921,34 @@ void main() {
                     println!("={}{} black={} white={}", p, coord.clone(), b.black_captures, b.white_captures);
                     board_changed = true;
                 } else {
-                    // AI passed (no legal point): drop snapshot
+                    // last_x == -1: no legal move
+                    // 2026-11-04: Wood Capture Go - check if board is full or draw
+                    i32 empties = 0;
+                    for (i32 ex = 0; ex < 13; ex++) {
+                        for (i32 ey = 0; ey < 13; ey++) {
+                            if (b.get(ex, ey) == 0) {
+                                empties = empties + 1;
+                            }
+                        }
+                    }
+                    
+                    if (empties == 0) {
+                        // Board full (theoretically impossible in Wood Capture Go)
+                        // Compare captures to determine winner
+                        if (b.black_captures > b.white_captures) {
+                            b.set_game_over_state(1);
+                        } else {
+                            b.set_game_over_state(2);
+                        }
+                        b.set_game_over_move(move_count);
+                    } else {
+                        // Board not full, but no legal move -> Draw -> White wins
+                        // 2026-11-04: Wood Capture Go rule - draw is a win for White
+                        b.set_game_over_state(3);  // 3 = draw
+                        b.set_game_over_move(move_count);
+                    }
+                    
+                    // Drop snapshot
                     i32 cbase2 = (i32)hist_cells.len() - 169;
                     hist_cells.truncate((usize)cbase2);
                     i32 mbase3 = (i32)hist_meta.len() - 5;

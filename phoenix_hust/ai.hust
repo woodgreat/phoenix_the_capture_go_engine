@@ -419,7 +419,8 @@ public class Level2 implements MoveGenerator {
             }
         }
         if (best_enc < 0) {
-            // Wood rules forbid passing: fill any empty point (random)
+            // Wood rules forbid passing: fill any LEGAL empty point
+            // 2026-11-04: Try each empty point until finding a legal one
             i32[169] all_empty = {0};
             i32 n_all = 0;
             for (i32 x = 0; x < 13; x++) {
@@ -430,10 +431,21 @@ public class Level2 implements MoveGenerator {
                     }
                 }
             }
-            if (n_all > 0) {
-                best_enc = all_empty[b2.rand_below(n_all)];
-                debug_log_i32(1, "L2", "filling random", best_enc);
-            } else {
+            // Try each empty point in order until finding a legal one
+            for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
+                i32 candidate = all_empty[idx];
+                i32 cx = candidate / 13;
+                i32 cy = candidate - cx * 13;
+                // Try placing on a copy
+                Board test_board = b2;
+                i32 r = test_board.place_stone(cx, cy, color);
+                if (r >= 0) {
+                    best_enc = candidate;
+                    debug_log_i32(1, "L2", "filling legal", best_enc);
+                }
+            }
+            if (best_enc < 0) {
+                // No legal move found (cannot_move)
                 this.last_x = -1;
                 this.last_y = -1;
                 return b2;

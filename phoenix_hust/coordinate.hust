@@ -97,6 +97,38 @@ public String wood_to_sgf(i32 x, i32 y) {
     return format!("{}{}", x_char, y_char);
 }
 
+// ========== Wood SGF Format (Wood Coordinate System) ==========
+// 
+// Wood SGF is a variant of SGF that uses Wood internal coordinates directly,
+// without y-axis flipping. This makes it easier to analyze games using
+// Wood's native coordinate system (x=0-12, y=0-12, where y=0 is row 1/bottom).
+//
+// Key differences from standard SGF:
+// - Standard SGF: y is flipped (sgf_y = 12 - wood_y)
+// - Wood SGF: y stays the same (woodsgf_y = wood_y)
+//
+// Coordinate mapping:
+// - Wood (0, 0) = A1 (bottom-left) -> Wood SGF "aa"
+// - Wood (12, 12) = M13 (top-right) -> Wood SGF "mm"
+// - Wood (5, 5) = F6 -> Wood SGF "ff"
+//
+// Use case: When analyzing games with Wood tools or debugging coordinate
+// conversion issues, Wood SGF preserves the original Wood coordinates,
+// eliminating confusion from y-axis flipping.
+//
+// Created: 2026-11-04
+// Author: 龙小虾 🦞
+
+// Convert Wood coordinates to Wood SGF string (no y-flip)
+// Wood SGF: y stays same (Wood y=0 -> SGF 'a', Wood y=12 -> SGF 'm')
+// This is for Wood SGF export where we want coordinates to match Wood system
+// Example: Wood (5, 6) -> "fg" (x=5->f, y=6->g, no flip)
+public String wood_to_woodsgf(i32 x, i32 y) {
+    char x_char = wood_x_to_sgf(x);
+    char y_char = wood_x_to_sgf(y);  // same letter mapping, NO flip
+    return format!("{}{}", x_char, y_char);
+}
+
 // Convert Wood board array to SGF coordinate list
 // Returns all non-empty points as SGF coordinates (comma-separated)
 // 2026-11-03: Changed from String[] to String to avoid Hust dynamic array limitation

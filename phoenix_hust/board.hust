@@ -54,7 +54,9 @@ public class Board {
     // Game state: 0=gaming, 1=black wins, 2=white wins
     // Updated after every genmove, read by result/board_status
     // Reset to 0 when board is cleared (usb command)
+    // 2026-11-04: game_over_move records which move ended the game
     i32 game_over_state;
+    i32 game_over_move;
 
     // === Capture History (2026-10-30) ===
     // Records every capture event for accurate state tracking.
@@ -92,6 +94,7 @@ public class Board {
         this.ko_x = -1;
         this.ko_y = -1;
         this.game_over_state = 0;  // Initialize game state
+        this.game_over_move = 0;   // 2026-11-04: Initialize winning move
         this.rng_seed = 88675123;
         this.search_nodes = 0;
         this.search_budget = 300000;
@@ -139,6 +142,7 @@ public class Board {
         this.ko_x = -1;
         this.ko_y = -1;
         this.game_over_state = 0;  // Reset game state
+        this.game_over_move = 0;   // 2026-11-04: Reset winning move
         this.capture_history_len = 0;
         for (i32 i = 0; i < BOARD_SIZE; i++) {
             for (i32 j = 0; j < BOARD_SIZE; j++) {
@@ -564,6 +568,15 @@ public class Board {
     
     public void set_game_over_state(i32 state) {
         this.game_over_state = state;
+    }
+    
+    // 2026-11-04: Winning move number getter/setter
+    public i32 get_game_over_move() {
+        return this.game_over_move;
+    }
+    
+    public void set_game_over_move(i32 mv) {
+        this.game_over_move = mv;
     }
 
     // Reset the search node counter and set the budget (called by the
