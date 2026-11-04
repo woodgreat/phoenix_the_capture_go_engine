@@ -52,7 +52,8 @@ public class Level1 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L1", "genmove color", color);   // rebind: params immutable, locals are mut
         i32 opp = b2.opponent(color);
         i32[169] capture_moves = {0};
@@ -354,7 +355,8 @@ public class Level2 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L2", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32 best_enc = -1;
@@ -431,13 +433,40 @@ public class Level2 implements MoveGenerator {
                     }
                 }
             }
+            // 2026-11-04 主人原则：房子不是集装箱。
+            // 先在循环外把棋盘状态提取到基本类型集装箱（轻量、可多次传递），
+            // 再在循环里用集装箱重建临时棋盘，不传递对象本身。
+            i32[13][13] grid_data = {0};
+            for (i32 si = 0; si < 13; si++) {
+                for (i32 sj = 0; sj < 13; sj++) {
+                    grid_data[si][sj] = b2.get(si, sj);
+                }
+            }
+            i32 black_caps_data = b2.get_captures(1);
+            i32 white_caps_data = b2.get_captures(2);
+            i32 ko_x_data = b2.get_ko_x();
+            i32 ko_y_data = b2.get_ko_y();
+            i32 move_count_data = b2.get_move_count();
+            i32 game_state_data = b2.get_game_over_state();
+            i32 game_move_data = b2.get_game_over_move();
             // Try each empty point in order until finding a legal one
             for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
                 i32 candidate = all_empty[idx];
                 i32 cx = candidate / 13;
                 i32 cy = candidate - cx * 13;
-                // Try placing on a copy
-                Board test_board = b2;
+                // 用集装箱重建临时棋盘
+                Board test_board = new Board();
+                for (i32 si = 0; si < 13; si++) {
+                    for (i32 sj = 0; sj < 13; sj++) {
+                        test_board.set(si, sj, grid_data[si][sj]);
+                    }
+                }
+                test_board.set_captures(1, black_caps_data);
+                test_board.set_captures(2, white_caps_data);
+                test_board.set_ko(ko_x_data, ko_y_data);
+                test_board.set_move_count(move_count_data);
+                test_board.set_game_over_state(game_state_data);
+                test_board.set_game_over_move(game_move_data);
                 i32 r = test_board.place_stone(cx, cy, color);
                 if (r >= 0) {
                     best_enc = candidate;
@@ -485,7 +514,8 @@ public class Level3 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L3", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32 best_enc = -1;
@@ -623,7 +653,8 @@ public class Level4 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L4", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32 best_enc = -1;
@@ -821,7 +852,8 @@ public class Level5 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L5", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32 best_enc = -1;
@@ -1078,7 +1110,8 @@ public class Level6 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L6", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32 best_enc = -1;
@@ -1183,7 +1216,8 @@ public class Level7 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L7", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32[4] dxs = {0, 0, 1, -1};
@@ -1292,7 +1326,8 @@ public class Level8 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L8", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32[4] dxs = {0, 0, 1, -1};
@@ -1400,7 +1435,8 @@ public class Level9 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L9", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32[4] dxs = {0, 0, 1, -1};
@@ -1509,7 +1545,8 @@ public class Level10 implements MoveGenerator {
     }
 
     public Board genmove(Board board, i32 color) {
-        Board b2 = board;
+        Board b2 = new Board();
+        b2.copy_from(board);
         debug_log_i32(1, "L10", "genmove color", color);
         i32 opp = b2.opponent(color);
         i32[4] dxs = {0, 0, 1, -1};

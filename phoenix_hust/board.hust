@@ -13,6 +13,9 @@
 // a value but tt_hash[] etc. do not exist, so no TT path compiles in.
 // Resume when any of B6/B7/B8/B9 or out-params is fixed.
 
+use RUST.time.SystemTime;
+use debug;
+
 // === Constants (P0 optimization 2026-10-10) ===
 // Extracted from magic numbers across the codebase.
 // Same-file const supports array dimensions (i32[BOARD_SIZE][BOARD_SIZE]).
@@ -87,6 +90,7 @@ public class Board {
     // setup_twist_cross() is called directly instead of requiring the
     // caller to invoke it after `new Board()`.
     // (2026-10-30) Add parameter to control twist-cross setup for debugging.
+    // (2026-11-04) Use current time as random seed for true randomness
     public Board() {
         this.black_captures = 0;
         this.white_captures = 0;
@@ -95,7 +99,9 @@ public class Board {
         this.ko_y = -1;
         this.game_over_state = 0;  // Initialize game state
         this.game_over_move = 0;   // 2026-11-04: Initialize winning move
-        this.rng_seed = 88675123;
+        // Use time-based seed for true randomness (2026-11-04 fix)
+        // Use inline SystemTime call to avoid Hust variable scope issues
+        this.rng_seed = (i32)(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() % 2147483647);
         this.search_nodes = 0;
         this.search_budget = 300000;
         this.capture_history_len = 0;
@@ -131,6 +137,49 @@ public class Board {
             this.tt_depth.push(0);
             this.tt_alpha.push(-INF);
             this.tt_beta.push(INF);
+        }
+    }
+
+    // Explicit deep copy of all mutable state from another board.
+    // Hust V0.2.x: implicit class copy (`Board b2 = board;`) aliases/behaves
+    // unreliably, so every copy site must call copy_from explicitly.
+    // (2026-11-04 fix for ai.hust:440 and all other copy sites)
+    public void copy_from(Board src) {
+        for (i32 i = 0; i < 13; i++) {
+            for (i32 j = 0; j < 13; j++) {
+                this.grid[i][j] = src.grid[i][j];
+            }
+        }
+        this.black_captures = src.black_captures;
+        this.white_captures = src.white_captures;
+        this.move_count = src.move_count;
+        this.rng_seed = src.rng_seed;
+        this.search_nodes = src.search_nodes;
+        this.search_budget = src.search_budget;
+        this.ko_x = src.ko_x;
+        this.ko_y = src.ko_y;
+        this.game_over_state = src.game_over_state;
+        this.game_over_move = src.game_over_move;
+        this.capture_history_len = src.capture_history_len;
+        this.capture_move.clear();
+        this.capture_color.clear();
+        this.capture_count.clear();
+        this.capture_x1.clear();
+        this.capture_y1.clear();
+        this.capture_x2.clear();
+        this.capture_y2.clear();
+        this.capture_x3.clear();
+        this.capture_y3.clear();
+        for (i32 i = 0; i < src.capture_move.len(); i++) {
+            this.capture_move.push(src.capture_move[i]);
+            this.capture_color.push(src.capture_color[i]);
+            this.capture_count.push(src.capture_count[i]);
+            this.capture_x1.push(src.capture_x1[i]);
+            this.capture_y1.push(src.capture_y1[i]);
+            this.capture_x2.push(src.capture_x2[i]);
+            this.capture_y2.push(src.capture_y2[i]);
+            this.capture_x3.push(src.capture_x3[i]);
+            this.capture_y3.push(src.capture_y3[i]);
         }
     }
 
@@ -331,10 +380,14 @@ public class Board {
     // State is saved before the tentative placement and restored on
     // rejection, so failed moves leave the board untouched.
     public i32 place_stone(i32 x, i32 y, i32 color) {
+        debug_log_i32_3(1, "PLACE", "enter", 1, "x", x, "y", y);
+        debug_log_i32_2(1, "PLACE", "color", color, "move_count", this.move_count);
         if (!this.is_valid(x, y)) {
+            debug_log_i32(1, "PLACE", "invalid_coord", 1);
             return -1;
         }
         if (!this.is_empty(x, y)) {
+            debug_log_i32(1, "PLACE", "not_empty", 1);
             return -1;
         }
 
@@ -392,6 +445,7 @@ public class Board {
         // Suicide: own group has no liberties and nothing was captured
         if (captured == 0) {
             if (this.count_liberties(x, y) == 0) {
+                debug_log_i32(1, "PLACE", "suicide_rollback", 1);
                 for (i32 i = 0; i < BOARD_SIZE; i++) {
                     for (i32 j = 0; j < BOARD_SIZE; j++) {
                         this.grid[i][j] = saved[i][j];
@@ -408,6 +462,7 @@ public class Board {
         // Ko: single-stone recapture exactly at the previous ko point
         if (captured == 1) {
             if (x == this.ko_x && y == this.ko_y) {
+                debug_log_i32(1, "PLACE", "ko_rollback", 1);
                 for (i32 i = 0; i < BOARD_SIZE; i++) {
                     for (i32 j = 0; j < BOARD_SIZE; j++) {
                         this.grid[i][j] = saved[i][j];
@@ -431,9 +486,11 @@ public class Board {
         } else {
             this.white_captures = this.white_captures + captured;
         }
+        debug_log_i32_2(1, "PLACE", "captured_total", captured, "new_move_count", this.move_count + 1);
         
         // Record capture history (2026-10-30)
         if (captured > 0) {
+            debug_log_i32(1, "PLACE", "capture_recorded", captured);
             i32 idx = this.capture_history_len;
             this.capture_move.push(this.move_count + 1);  // +1 because move_count not yet incremented
             this.capture_color.push(color);
@@ -504,6 +561,20 @@ public class Board {
             return this.white_captures;
         }
         return 0;
+    }
+
+    // Ko point accessors (2026-11-04): needed by the container-pattern copy
+    // in ai.hust so the ko state can travel with the extracted data.
+    public i32 get_ko_x() {
+        return this.ko_x;
+    }
+
+    public i32 get_ko_y() {
+        return this.ko_y;
+    }
+
+    public i32 get_move_count() {
+        return this.move_count;
     }
 
     // Opponent color: 1 -> 2, 2 -> 1

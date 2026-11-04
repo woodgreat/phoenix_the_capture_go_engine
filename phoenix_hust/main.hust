@@ -478,6 +478,7 @@ void main() {
             b.print_board();
         } else if (cmd == "play") {
             // play <color> <coord|pass|resign>
+            debug_log_i32(1, "PLAY", "entry", 1);
             i32 color = 0;
             if (a1 == "black" || a1 == "b") {
                 color = 1;
@@ -494,6 +495,7 @@ void main() {
             } else {
                 i32 x = gtp_coord_to_x(a2.clone());
                 i32 y = gtp_coord_to_y(a2.clone());
+                debug_log_i32_3(1, "PLAY", "coord_x", x, "coord_y", y, "move_count", b.move_count);
                 if (x < 0 || y < 0) {
                     println!("?{}invalid coordinate", p);
                 } else {
@@ -517,6 +519,7 @@ void main() {
                         move_history.push(y);
                         move_history.push(r);
                         move_count = move_count + 1;
+                        debug_log_i32_3(1, "PLAY", "ok", 1, "captured", r, "new_move_count", b.move_count);
                         println!("={}", p);
                         board_changed = true;
                     } else {
@@ -526,6 +529,7 @@ void main() {
                         hist_cells.truncate((usize)cbase);
                         i32 mbase2 = (i32)hist_meta.len() - 5;
                         hist_meta.truncate((usize)mbase2);
+                        debug_log_i32_2(1, "PLAY", "rejected", r, "move_count", b.move_count);
                         if (r == -2) {
                             println!("?{}illegal move (suicide)", p);
                         } else if (r == -3) {
