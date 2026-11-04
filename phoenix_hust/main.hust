@@ -106,7 +106,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.2.7.20261103003400");
+        println!("phoenix 0.2.7.20261104174032");
         return;
     }
     if (arg1 == "--help") {
@@ -303,7 +303,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("={}0.2.7.20261103003400", p);
+            println!("={}0.2.7.20261104174032", p);
         } else if (cmd == "known_command") {
             String k = "false";
             if (a1 == "protocol_version" || a1 == "name" || a1 == "version"

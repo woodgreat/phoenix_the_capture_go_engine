@@ -100,8 +100,9 @@ public class Board {
         this.game_over_state = 0;  // Initialize game state
         this.game_over_move = 0;   // 2026-11-04: Initialize winning move
         // Use time-based seed for true randomness (2026-11-04 fix)
-        // Use inline SystemTime call to avoid Hust variable scope issues
-        this.rng_seed = (i32)(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() % 2147483647);
+        // Use nanosecond precision to avoid identical seeds when multiple
+        // games start within the same second (batch testing bug)
+        this.rng_seed = (i32)(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos() % 2147483647);
         this.search_nodes = 0;
         this.search_budget = 300000;
         this.capture_history_len = 0;
