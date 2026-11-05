@@ -1040,6 +1040,15 @@ public class Board {
                 snap[i][j] = this.grid[i][j];
             }
         }
+        // 2026-11-05 修复 minimax 状态污染：
+        // remove_group 在虚招中真正移除对方棋子但不更新 black/white_captures；
+        // 同时 ko_x/ko_y 与 move_count 也会被虚招影响。必须随 snap 一起保存/恢复，
+        // 否则深层 evaluate_for 会读到被污染的计数器与劫点。
+        i32 save_ko_x = this.ko_x;
+        i32 save_ko_y = this.ko_y;
+        i32 save_black_caps = this.black_captures;
+        i32 save_white_caps = this.white_captures;
+        i32 save_move_count = this.move_count;
         bool maximizing = color_to_move == ai_color;
         i32 best = INF;
         if (maximizing) {
@@ -1071,6 +1080,12 @@ public class Board {
                             this.grid[i][j] = snap[i][j];
                         }
                     }
+                    // 恢复 ko/captures/move_count（防止虚招污染搜索状态）
+                    this.ko_x = save_ko_x;
+                    this.ko_y = save_ko_y;
+                    this.black_captures = save_black_caps;
+                    this.white_captures = save_white_caps;
+                    this.move_count = save_move_count;
                     if (maximizing) {
                         if (val > best) {
                             best = val;

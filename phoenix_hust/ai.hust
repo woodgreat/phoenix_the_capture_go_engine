@@ -29,6 +29,108 @@
 use board;
 use debug;
 
+// ============================================================================
+// 概率控制层 (Probability Control Layer)
+// 2026-11-05: 按等级控制战术启用概率，避免低等级 AI 盲目使用高级战术
+// ============================================================================
+
+// 弃子概率表：等级 -> 概率 (0-100)
+// 低等级搜索深度不够，弃子=胡走；高等级搜索够深，弃子有意义
+fn get_sacrifice_probability(i32 level) -> i32 {
+    if (level <= 1) {
+        return 0;    // LV1: 永不弃子
+    } else if (level == 2) {
+        return 20;   // LV2: 20% 概率弃子
+    } else if (level == 3) {
+        return 40;   // LV3: 40% 概率弃子
+    } else if (level == 4) {
+        return 60;   // LV4: 60% 概率弃子
+    } else if (level == 5) {
+        return 80;   // LV5: 80% 概率弃子
+    } else {
+        return 100;  // LV6+: 总是弃子
+    }
+}
+
+// 救援概率表：等级 -> 概率 (0-100)
+// 低等级优先保全，高等级可以权衡弃子
+fn get_rescue_probability(i32 level) -> i32 {
+    if (level <= 1) {
+        return 100;  // LV1: 总是救援
+    } else if (level == 2) {
+        return 90;   // LV2: 90% 概率救援
+    } else if (level == 3) {
+        return 80;   // LV3: 80% 概率救援
+    } else if (level == 4) {
+        return 70;   // LV4: 70% 概率救援
+    } else {
+        return 60;   // LV5+: 60% 概率救援
+    }
+}
+
+// 劫争分析概率表：等级 -> 概率 (0-100)
+// 低等级避免复杂劫争，高等级可以处理
+fn get_ko_analysis_probability(i32 level) -> i32 {
+    if (level <= 1) {
+        return 0;    // LV1: 不分析劫争
+    } else if (level == 2) {
+        return 30;   // LV2: 30% 概率分析
+    } else if (level == 3) {
+        return 50;   // LV3: 50% 概率分析
+    } else if (level == 4) {
+        return 70;   // LV4: 70% 概率分析
+    } else {
+        return 100;  // LV5+: 总是分析
+    }
+}
+
+// 随机数生成器（使用 Board 的 rand_below）
+fn roll_probability(Board b, i32 probability) -> bool {
+    if (probability <= 0) {
+        return false;
+    }
+    if (probability >= 100) {
+        return true;
+    }
+    return b.rand_below(100) < probability;
+}
+
+// ============================================================================
+// 战术方法封装（Tactical Method Encapsulation）
+// 2026-11-05: 将散布在 LevelN.genmove 中的硬编码战术逻辑抽取为独立函数，
+// 便于统一调阅、单测和后续策略调优。
+// ============================================================================
+
+// 弃子判断：基于概率表 + 搜索预算 + 攻击性标志
+// 语义：当前回合是否允许主动弃子（不救即将被提的己方子）
+fn should_sacrifice(Board b, i32 level, i32 search_budget, bool aggressive) -> bool {
+    i32 prob = get_sacrifice_probability(level);
+    // 攻击模式下提升弃子意愿（如有足够搜索深度能算清后续手段）
+    if (aggressive && search_budget > 100000 && prob < 80) {
+        prob = 80;
+    }
+    return roll_probability(b, prob);
+}
+
+// 救援判断：基于概率表 + 搜索预算
+// 语义：当前回合是否优先救援被叫吃的己方子
+fn should_rescue(Board b, i32 level, i32 search_budget) -> bool {
+    // 搜索预算过低时放弃救援（救也看不清，不如直接脱先）
+    if (search_budget < 50000) {
+        return false;
+    }
+    return roll_probability(b, get_rescue_probability(level));
+}
+
+// 劫威胁分析：基于概率表 + 搜索预算
+// 语义：当前回合是否启用劫争分析（识别 ko 点、规避单劫归 imbalances）
+fn analyze_ko_threat(Board b, i32 level, i32 search_budget) -> bool {
+    if (search_budget < 20000) {
+        return false;
+    }
+    return roll_probability(b, get_ko_analysis_probability(level));
+}
+
 interface MoveGenerator {
     public newBoard genmove(board, color);
 }
@@ -369,6 +471,17 @@ public class Level2 implements MoveGenerator {
                 saved_grid[i][j] = b2.get(i, j);
             }
         }
+        
+        // 2026-11-05 概率控制：使用封装的战术方法
+        bool allow_sacrifice = should_sacrifice(b2, 2, 200000, false);
+        bool prioritize_rescue = should_rescue(b2, 2, 200000);
+        bool analyze_ko = analyze_ko_threat(b2, 2, 200000);
+        
+        // 如果本回合不允许弃子，优先救援模式
+        if (!allow_sacrifice && prioritize_rescue) {
+            debug_log_i32(1, "L2", "rescue_priority_mode", 1);
+        }
+        
         for (i32 x = 0; x < 13; x++) {
             for (i32 y = 0; y < 13; y++) {
                 if (b2.get(x, y) == 0) {
@@ -391,6 +504,10 @@ public class Level2 implements MoveGenerator {
                         for (i32 j = 0; j < 13; j++) {
                             b2.set(i, j, saved_grid[i][j]);
                         }
+                    }
+                    // 2026-11-05 概率控制：不允许弃子时，跳过危险的 minimax 评估
+                    if (!allow_sacrifice && !alive) {
+                        continue;  // 跳过这步，不弃子
                     }
                     if (alive && !(is_ko && cap == 1)) {
                         // Level 2 (对标 Level 6): depth-1 minimax evaluation
@@ -522,6 +639,15 @@ public class Level3 implements MoveGenerator {
         i32 best_score = -1000000;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
+        
+        // 2026-11-05 概率控制：获取本等级的战术启用概率
+        i32 sac_prob = get_sacrifice_probability(3);
+        i32 rescue_prob = get_rescue_probability(3);
+        i32 ko_prob = get_ko_analysis_probability(3);
+        bool allow_sacrifice = roll_probability(b2, sac_prob);
+        bool prioritize_rescue = roll_probability(b2, rescue_prob);
+        bool analyze_ko = roll_probability(b2, ko_prob);
+        
         // Save full board state for restoration after virtual placement
         i32[13][13] saved_grid = {0};
         for (i32 i = 0; i < 13; i++) {
@@ -564,8 +690,11 @@ public class Level3 implements MoveGenerator {
                     if (!alive && cap == 0) {
                         legal = false;
                     }
-                    if (is_ko && cap == 1) {
-                        legal = false;
+                    if (!allow_sacrifice && !alive) {
+                        legal = false;  // 2026-11-05 概率控制：不允许弃子
+                    }
+                    if (is_ko && cap == 1 && !analyze_ko) {
+                        legal = false;  // 2026-11-05 概率控制：不分析 ko 时避开
                     }
                     if (legal) {
                         i32 score = cap * 1000 + atari * 60 + self_libs * 8;
@@ -661,6 +790,14 @@ public class Level4 implements MoveGenerator {
         i32 best_score = -1000000;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
+        // 2026-11-05 概率控制：获取本等级的战术启用概率
+        i32 sac_prob = get_sacrifice_probability(4);
+        i32 rescue_prob = get_rescue_probability(4);
+        i32 ko_prob = get_ko_analysis_probability(4);
+        bool allow_sacrifice = roll_probability(b2, sac_prob);
+        bool prioritize_rescue = roll_probability(b2, rescue_prob);
+        bool analyze_ko = roll_probability(b2, ko_prob);
+        
         i32[13][13] saved_grid = {0};
         for (i32 i = 0; i < 13; i++) {
             for (i32 j = 0; j < 13; j++) {
@@ -703,8 +840,11 @@ public class Level4 implements MoveGenerator {
                     if (!alive && cap == 0) {
                         legal = false;
                     }
-                    if (is_ko && cap == 1) {
-                        legal = false;
+                    if (!allow_sacrifice && !alive) {
+                        legal = false;  // 2026-11-05 概率控制：不允许弃子
+                    }
+                    if (is_ko && cap == 1 && !analyze_ko) {
+                        legal = false;  // 2026-11-05 概率控制：不分析 ko 时避开
                     }
                     if (legal) {
                         i32 score = cap * 1000 + atari * 60 + self_libs * 8;
@@ -861,6 +1001,14 @@ public class Level5 implements MoveGenerator {
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
         
+        // 2026-11-05 概率控制：获取本等级的战术启用概率
+        i32 sac_prob = get_sacrifice_probability(5);
+        i32 rescue_prob = get_rescue_probability(5);
+        i32 ko_prob = get_ko_analysis_probability(5);
+        bool allow_sacrifice = roll_probability(b2, sac_prob);
+        bool prioritize_rescue = roll_probability(b2, rescue_prob);
+        bool analyze_ko = roll_probability(b2, ko_prob);
+        
         // Atari rescue: check if our group is in atari and find rescue moves
         i32[6] gres = b2.analyze_groups(color);
         i32 my_gval = gres[0];
@@ -870,7 +1018,8 @@ public class Level5 implements MoveGenerator {
         i32 my_atari_max = gres[4];
         i32 opp_atari_max = gres[5];
         
-        if (my_atari_cnt > 0) {
+        // 2026-11-05 概率控制：只有 prioritize_rescue 时才做完整 rescue 搜索
+        if (my_atari_cnt > 0 && prioritize_rescue) {
             debug_log_i32(1, "L5", "atari detected, max_size", my_atari_max);
             // Try to find rescue moves for atari groups
             // A rescue move either: captures the attacking stones, or extends liberties
@@ -1118,6 +1267,15 @@ public class Level6 implements MoveGenerator {
         i32 best_val = -999999;
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
+        
+        // 2026-11-05 概率控制：获取本等级的战术启用概率
+        i32 sac_prob = get_sacrifice_probability(6);
+        i32 rescue_prob = get_rescue_probability(6);
+        i32 ko_prob = get_ko_analysis_probability(6);
+        bool allow_sacrifice = roll_probability(b2, sac_prob);
+        bool prioritize_rescue = roll_probability(b2, rescue_prob);
+        bool analyze_ko = roll_probability(b2, ko_prob);
+        
         b2.start_search(400000);
         for (i32 x = 0; x < 13; x++) {
             for (i32 y = 0; y < 13; y++) {
@@ -1151,7 +1309,16 @@ public class Level6 implements MoveGenerator {
                     }
                     bool alive = b2.count_liberties(x, y) > 0;
                     i32 val = -999999;
-                    if (alive && !(is_ko && cap == 1)) {
+                    // 2026-11-05 概率控制：不允许弃子时，跳过危险点
+                    if (!allow_sacrifice && !alive) {
+                        for (i32 i = 0; i < 13; i++) {
+                            for (i32 j = 0; j < 13; j++) {
+                                b2.set(i, j, snap[i][j]);
+                            }
+                        }
+                        continue;
+                    }
+                    if (alive && !(is_ko && cap == 1 && !analyze_ko)) {
                         val = b2.minimax(4, opp, color, -999999, 999999);
                     }
                     for (i32 i = 0; i < 13; i++) {
@@ -1237,6 +1404,15 @@ public class Level7 implements MoveGenerator {
         i32 opp = b2.opponent(color);
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
+        
+        // 2026-11-05 概率控制：获取本等级的战术启用概率
+        i32 sac_prob = get_sacrifice_probability(7);
+        i32 rescue_prob = get_rescue_probability(7);
+        i32 ko_prob = get_ko_analysis_probability(7);
+        bool allow_sacrifice = roll_probability(b2, sac_prob);
+        bool prioritize_rescue = roll_probability(b2, rescue_prob);
+        bool analyze_ko = roll_probability(b2, ko_prob);
+        
         // iterative deepening: 2..5 ply
         i32 best_enc = -1;
         for (i32 dd = 4; dd <= 7; dd++) {
@@ -1268,7 +1444,16 @@ public class Level7 implements MoveGenerator {
                         }
                         bool alive = b2.count_liberties(x, y) > 0;
                         i32 val = -999999;
-                        if (alive && !(is_ko && cap == 1)) {
+                        // 2026-11-05 概率控制：不允许弃子时，跳过危险点
+                        if (!allow_sacrifice && !alive) {
+                            for (i32 i = 0; i < 13; i++) {
+                                for (i32 j = 0; j < 13; j++) {
+                                    b2.set(i, j, snap[i][j]);
+                                }
+                            }
+                            continue;
+                        }
+                        if (alive && !(is_ko && cap == 1 && !analyze_ko)) {
                             val = b2.minimax(dd - 1, opp, color, -999999, 999999);
                         // 2026-11-05 de-homogenization: add random noise to break determinism
                         val = val + b2.rand_below(401) - 200;
@@ -1354,6 +1539,15 @@ public class Level8 implements MoveGenerator {
         i32 opp = b2.opponent(color);
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
+        
+        // 2026-11-05 概率控制：获取本等级的战术启用概率
+        i32 sac_prob = get_sacrifice_probability(8);
+        i32 rescue_prob = get_rescue_probability(8);
+        i32 ko_prob = get_ko_analysis_probability(8);
+        bool allow_sacrifice = roll_probability(b2, sac_prob);
+        bool prioritize_rescue = roll_probability(b2, rescue_prob);
+        bool analyze_ko = roll_probability(b2, ko_prob);
+        
         i32 best_enc = -1;
         for (i32 dd = 5; dd <= 8; dd++) {
             best_enc = -1;
@@ -1384,7 +1578,16 @@ public class Level8 implements MoveGenerator {
                         }
                         bool alive = b2.count_liberties(x, y) > 0;
                         i32 val = -999999;
-                        if (alive && !(is_ko && cap == 1)) {
+                        // 2026-11-05 概率控制：不允许弃子时，跳过危险点
+                        if (!allow_sacrifice && !alive) {
+                            for (i32 i = 0; i < 13; i++) {
+                                for (i32 j = 0; j < 13; j++) {
+                                    b2.set(i, j, snap[i][j]);
+                                }
+                            }
+                            continue;
+                        }
+                        if (alive && !(is_ko && cap == 1 && !analyze_ko)) {
                             val = b2.minimax(dd - 1, opp, color, -999999, 999999);
                         // 2026-11-05 de-homogenization: add random noise to break determinism
                         val = val + b2.rand_below(401) - 200;
