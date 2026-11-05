@@ -154,7 +154,11 @@ public class Board {
         this.black_captures = src.black_captures;
         this.white_captures = src.white_captures;
         this.move_count = src.move_count;
-        this.rng_seed = src.rng_seed;
+        // 2026-11-05 de-homogenization fix: do NOT copy rng_seed.
+        // The destination board already has a fresh time-based seed from its
+        // constructor.  Copying the source seed would make every AI decision
+        // deterministic (same seed -> same rand_below sequence), which is
+        // exactly the LV7-LV10 homogenization bug we are fixing.
         this.search_nodes = src.search_nodes;
         this.search_budget = src.search_budget;
         this.ko_x = src.ko_x;

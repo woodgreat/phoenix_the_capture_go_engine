@@ -758,7 +758,7 @@ public class Level4 implements MoveGenerator {
                 }
             }
         }
-        b2.start_search(50000);
+        b2.start_search(300000);
         i32 best_val = -999999;
         for (i32 k = 0; k < 5; k++) {
             if (top_enc[k] < 0) {
@@ -1162,6 +1162,11 @@ public class Level6 implements MoveGenerator {
                     if (val > best_val) {
                         best_val = val;
                         best_enc = x * 13 + y;
+                    } else if (val == best_val && val > -999999) {
+                        // Random tie-breaking: equal value, randomly switch
+                        if (b2.rand_below(2) == 0) {
+                            best_enc = x * 13 + y;
+                        }
                     }
                 }
             }
@@ -1237,7 +1242,7 @@ public class Level7 implements MoveGenerator {
         for (i32 dd = 4; dd <= 7; dd++) {
             best_enc = -1;
             i32 best_val = -999999;
-            b2.start_search(300000);
+            b2.start_search(500000);
             for (i32 x = 0; x < 13; x++) {
                 for (i32 y = 0; y < 13; y++) {
                     if (b2.get(x, y) == 0) {
@@ -1265,6 +1270,8 @@ public class Level7 implements MoveGenerator {
                         i32 val = -999999;
                         if (alive && !(is_ko && cap == 1)) {
                             val = b2.minimax(dd - 1, opp, color, -999999, 999999);
+                        // 2026-11-05 de-homogenization: add random noise to break determinism
+                        val = val + b2.rand_below(401) - 200;
                         }
                         for (i32 i = 0; i < 13; i++) {
                             for (i32 j = 0; j < 13; j++) {
@@ -1274,6 +1281,11 @@ public class Level7 implements MoveGenerator {
                         if (val > best_val) {
                             best_val = val;
                             best_enc = x * 13 + y;
+                        } else if (val == best_val && val > -999999) {
+                            // Random tie-breaking: equal value, randomly switch
+                            if (b2.rand_below(2) == 0) {
+                                best_enc = x * 13 + y;
+                            }
                         }
                     }
                 }
@@ -1346,7 +1358,7 @@ public class Level8 implements MoveGenerator {
         for (i32 dd = 5; dd <= 8; dd++) {
             best_enc = -1;
             i32 best_val = -999999;
-            b2.start_search(500000);
+            b2.start_search(600000);
             for (i32 x = 0; x < 13; x++) {
                 for (i32 y = 0; y < 13; y++) {
                     if (b2.get(x, y) == 0) {
@@ -1374,6 +1386,8 @@ public class Level8 implements MoveGenerator {
                         i32 val = -999999;
                         if (alive && !(is_ko && cap == 1)) {
                             val = b2.minimax(dd - 1, opp, color, -999999, 999999);
+                        // 2026-11-05 de-homogenization: add random noise to break determinism
+                        val = val + b2.rand_below(401) - 200;
                         }
                         for (i32 i = 0; i < 13; i++) {
                             for (i32 j = 0; j < 13; j++) {
@@ -1383,6 +1397,11 @@ public class Level8 implements MoveGenerator {
                         if (val > best_val) {
                             best_val = val;
                             best_enc = x * 13 + y;
+                        } else if (val == best_val && val > -999999) {
+                            // Random tie-breaking: equal value, randomly switch
+                            if (b2.rand_below(2) == 0) {
+                                best_enc = x * 13 + y;
+                            }
                         }
                     }
                 }
@@ -1455,7 +1474,7 @@ public class Level9 implements MoveGenerator {
         for (i32 dd = 6; dd <= 9; dd++) {
             best_enc = -1;
             i32 best_val = -999999;
-            b2.start_search(800000);
+            b2.start_search(700000);
             for (i32 x = 0; x < 13; x++) {
                 for (i32 y = 0; y < 13; y++) {
                     if (b2.get(x, y) == 0) {
@@ -1483,6 +1502,8 @@ public class Level9 implements MoveGenerator {
                         i32 val = -999999;
                         if (alive && !(is_ko && cap == 1)) {
                             val = b2.minimax(dd - 1, opp, color, -999999, 999999);
+                        // 2026-11-05 de-homogenization: add random noise to break determinism
+                        val = val + b2.rand_below(401) - 200;
                         }
                         for (i32 i = 0; i < 13; i++) {
                             for (i32 j = 0; j < 13; j++) {
@@ -1492,6 +1513,11 @@ public class Level9 implements MoveGenerator {
                         if (val > best_val) {
                             best_val = val;
                             best_enc = x * 13 + y;
+                        } else if (val == best_val && val > -999999) {
+                            // Random tie-breaking: equal value, randomly switch
+                            if (b2.rand_below(2) == 0) {
+                                best_enc = x * 13 + y;
+                            }
                         }
                     }
                 }
@@ -1565,7 +1591,7 @@ public class Level10 implements MoveGenerator {
         for (i32 dd = 7; dd <= 10; dd++) {
             best_enc = -1;
             i32 best_val = -999999;
-            b2.start_search(1000000);
+            b2.start_search(800000);
             for (i32 x = 0; x < 13; x++) {
                 for (i32 y = 0; y < 13; y++) {
                     if (b2.get(x, y) == 0) {
@@ -1593,6 +1619,8 @@ public class Level10 implements MoveGenerator {
                         i32 val = -999999;
                         if (alive && !(is_ko && cap == 1)) {
                             val = b2.minimax(dd - 1, opp, color, -999999, 999999);
+                        // 2026-11-05 de-homogenization: add random noise to break determinism
+                        val = val + b2.rand_below(401) - 200;
                         }
                         for (i32 i = 0; i < 13; i++) {
                             for (i32 j = 0; j < 13; j++) {
@@ -1602,6 +1630,11 @@ public class Level10 implements MoveGenerator {
                         if (val > best_val) {
                             best_val = val;
                             best_enc = x * 13 + y;
+                        } else if (val == best_val && val > -999999) {
+                            // Random tie-breaking: equal value, randomly switch
+                            if (b2.rand_below(2) == 0) {
+                                best_enc = x * 13 + y;
+                            }
                         }
                     }
                 }
