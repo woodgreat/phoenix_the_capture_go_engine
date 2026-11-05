@@ -1613,11 +1613,18 @@ public class Level7 implements MoveGenerator {
         
         // iterative deepening: 2..5 ply
         i32 best_enc = -1;
+        i32 best_val = -999999;
         for (i32 dd = 4; dd <= 7; dd++) {
-            best_enc = -1;
-            i32 best_val = -999999;
-            b2.start_search(500000);
+            i32 round_enc = -1;
+            i32 round_val = -999999;
+            bool round_complete = true;
+            // Split the total budget across the four rounds.
+            b2.start_search(125000);
             for (i32 x = 0; x < 13; x++) {
+                if (b2.search_nodes > b2.search_budget) {
+                    round_complete = false;
+                    break;
+                }
                 for (i32 y = 0; y < 13; y++) {
                     if (b2.get(x, y) == 0) {
                         bool is_ko = b2.is_ko_point(x, y);
@@ -1661,21 +1668,24 @@ public class Level7 implements MoveGenerator {
                                 b2.set(i, j, snap[i][j]);
                             }
                         }
-                        if (val > best_val) {
-                            best_val = val;
-                            best_enc = x * 13 + y;
-                        } else if (val == best_val && val > -999999) {
+                        if (val > round_val) {
+                            round_val = val;
+                            round_enc = x * 13 + y;
+                        } else if (val == round_val && val > -999999) {
                             // Random tie-breaking: equal value, randomly switch
                             if (b2.rand_below(2) == 0) {
-                                best_enc = x * 13 + y;
+                                round_enc = x * 13 + y;
                             }
                         }
                     }
                 }
             }
-            if (b2.search_nodes > b2.search_budget) {
+            if (!round_complete || b2.search_nodes > b2.search_budget) {
+                // This round did not finish; keep the previous complete round.
                 break;
             }
+            best_enc = round_enc;
+            best_val = round_val;
         }
         if (best_enc < 0) {
             // Wood rules forbid passing: fill any empty point (random)
