@@ -697,13 +697,15 @@ void main() {
             sgf_content = sgf_content + ")";
             
             // Generate filename with timestamp
-            SystemTime now = SystemTime::now();
-            i64 time_value = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+            // 2026-11-05: use the fully-qualified Rust path (Hust B1
+            // workaround) because hust 0.3.9 does not emit the `use` line.
+            i64 time_value = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
             String timestamp = format_time_value(time_value);
             
             // Check if user specified custom filename
             String filename;
             if (a1 != "") {
+                // User specified filename: export_wsgf mygame
                 filename = format!("{}_wood.wsgf", a1);
             } else {
                 filename = format!("phoenix_game_{}_{}_wood.wsgf", move_count, timestamp);
@@ -736,8 +738,8 @@ void main() {
             
             // Generate filename with timestamp
             // 2026-10-31: Convert time value to formatted timestamp
-            SystemTime now = SystemTime::now();
-            i64 time_value = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+            // 2026-11-05: fully-qualified Rust path (Hust B1 workaround).
+            i64 time_value = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
             String timestamp = format_time_value(time_value);
             
             // Check if user specified custom filename

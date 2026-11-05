@@ -102,7 +102,9 @@ public class Board {
         // Use time-based seed for true randomness (2026-11-04 fix)
         // Use nanosecond precision to avoid identical seeds when multiple
         // games start within the same second (batch testing bug)
-        this.rng_seed = (i32)(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos() % 2147483647);
+        // 2026-11-05: fully-qualified Rust path (Hust B1 workaround) because
+        // hust 0.3.9 does not emit the `use RUST.time.SystemTime` line.
+        this.rng_seed = (i32)(std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_nanos() % 2147483647);
         this.search_nodes = 0;
         this.search_budget = 300000;
         this.capture_history_len = 0;
@@ -511,6 +513,53 @@ public class Board {
         
         this.move_count = this.move_count + 1;
         return captured;
+    }
+
+    // Test whether (x, y) is a legal placement for `color` WITHOUT changing
+    // the board. Mirrors place_stone's legality checks:
+    //   - in range and empty
+    //   - not suicide (own group has a liberty, or a capture was made)
+    //   - not an immediate single-stone ko recapture
+    // Used by the AI fallback: when the normal candidate scan finds nothing,
+    // try empty points one by one instead of picking one at random and
+    // returning cannot_move if it happens to be illegal.
+    public bool is_legal_placement(i32 x, i32 y, i32 color) {
+        if (!this.is_valid(x, y)) {
+            return false;
+        }
+        if (!this.is_empty(x, y)) {
+            return false;
+        }
+        i32[BOARD_SIZE][BOARD_SIZE] snap = {0};
+        for (i32 i = 0; i < BOARD_SIZE; i++) {
+            for (i32 j = 0; j < BOARD_SIZE; j++) {
+                snap[i][j] = this.grid[i][j];
+            }
+        }
+        this.grid[x][y] = color;
+        i32 opp = this.opponent(color);
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        i32 cap = 0;
+        for (i32 d = 0; d < 4; d++) {
+            i32 nx = x + dxs[d];
+            i32 ny = y + dys[d];
+            if (this.is_valid(nx, ny)) {
+                if (this.grid[nx][ny] == opp) {
+                    if (this.count_liberties(nx, ny) == 0) {
+                        cap = cap + this.remove_group(nx, ny);
+                    }
+                }
+            }
+        }
+        bool alive = this.count_liberties(x, y) > 0;
+        bool ko_bad = (cap == 1) && (x == this.ko_x && y == this.ko_y);
+        for (i32 i = 0; i < BOARD_SIZE; i++) {
+            for (i32 j = 0; j < BOARD_SIZE; j++) {
+                this.grid[i][j] = snap[i][j];
+            }
+        }
+        return (alive || cap > 0) && !ko_bad;
     }
 
     // Get capture history length
