@@ -22,7 +22,9 @@ for ((game=1; game<=NUM_GAMES; game++)); do
     echo -n "Game $game: "
     
     # Build GTP commands
-    COMMANDS="clear_board"
+    COMMANDS="clear_board
+salb $BLACK_LEVEL
+salw $WHITE_LEVEL"
     for ((i=1; i<=MAX_MOVES; i++)); do
         if [ $((i % 2)) -eq 1 ]; then
             COMMANDS="$COMMANDS
@@ -37,7 +39,7 @@ result
 quit"
     
     # Run game and capture result (last "= gaming/black/white" line)
-    RESULT=$(echo "$COMMANDS" | timeout 60 ./phoenix --level $BLACK_LEVEL 2>&1 | grep -E "^= (gaming|black|white)" | tail -1)
+    RESULT=$(echo "$COMMANDS" | timeout 60 ../phoenix_hust/phoenix 2>&1 | grep -E "^= (gaming|black|white)" | tail -1)
     
     # Count result
     if echo "$RESULT" | grep -q "black"; then
