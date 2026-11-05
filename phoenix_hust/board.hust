@@ -896,6 +896,24 @@ public class Board {
     public i32 evaluate_for(i32 ai_color) {
         debug_log_i32(3, "EVAL", "ai_color", ai_color);
         i32 opp = this.opponent(ai_color);
+        // L1 terminal + L2 quota (2026-11-05): the asymmetric targets are
+        // black 6 / white 5. Without terminal awareness the search cannot
+        // see a win; without quota awareness White does not know it is only
+        // one capture away and never defends or counter-attacks properly.
+        i32 my_cap = this.get_captures(ai_color);
+        i32 opp_cap = this.get_captures(opp);
+        i32 my_target = BLACK_TARGET;
+        i32 opp_target = WHITE_TARGET;
+        if (ai_color != 1) {
+            my_target = WHITE_TARGET;
+            opp_target = BLACK_TARGET;
+        }
+        if (my_cap >= my_target) {
+            return 900000;
+        }
+        if (opp_cap >= opp_target) {
+            return -900000;
+        }
         i32 my_stones = 0;
         i32 opp_stones = 0;
         i32 my_libs = 0;
@@ -969,9 +987,32 @@ public class Board {
             tactical = tactical + opp_atari_max * 60;
         }
 
-        return (my_stones - opp_stones) * 100 + (my_libs - opp_libs) * 8
+        i32 base = (my_stones - opp_stones) * 100 + (my_libs - opp_libs) * 8
              + cap_diff * 100 + eye * 50 + conn * 30
              + (my_gval - opp_gval) / 10 + tactical;
+        // L2 quota weighting: proximity to my target is good; proximity of the
+        // opponent to their target is slightly more dangerous (defence bias).
+        // 2026-11-05: weights kept in the same order of magnitude as the
+        // capture diff (100/stone). The earlier 4000/5000 values made the AI
+        // avoid risk and drag games to 150+ moves instead of capturing.
+        i32 my_gap = my_target - my_cap;
+        i32 opp_gap = opp_target - opp_cap;
+        i32 quota = 0;
+        if (my_gap == 1) {
+            quota = quota + 400;
+        } else if (my_gap == 2) {
+            quota = quota + 120;
+        } else if (my_gap == 3) {
+            quota = quota + 30;
+        }
+        if (opp_gap == 1) {
+            quota = quota - 500;
+        } else if (opp_gap == 2) {
+            quota = quota - 150;
+        } else if (opp_gap == 3) {
+            quota = quota - 40;
+        }
+        return base + quota;
     }
 
     // Eye potential for color: count points that could become eyes.

@@ -934,15 +934,17 @@ public class Level4 implements MoveGenerator {
             this.last_y = -1;
             return b2;
         }
-        // Pass 2: pick top 5 by score, do depth-1 search
-        i32[5] top_enc = {-1, -1, -1, -1, -1};
-        i32[5] top_score = {-1000000, -1000000, -1000000, -1000000, -1000000};
+        // Pass 2: pick top 8 by score, do depth-1 search
+        // 2026-11-05: widened from 5 to 8. The heuristic top-5 often missed
+        // defensive points, making LV4 weaker than LV3 when playing White.
+        i32[8] top_enc = {-1, -1, -1, -1, -1, -1, -1, -1};
+        i32[8] top_score = {-1000000, -1000000, -1000000, -1000000, -1000000, -1000000, -1000000, -1000000};
         for (i32 i = 0; i < n_cand; i++) {
             i32 s = cand_score[i];
             i32 e = cand_enc[i];
-            for (i32 k = 0; k < 5; k++) {
+            for (i32 k = 0; k < 8; k++) {
                 if (s > top_score[k]) {
-                    for (i32 m = 4; m > k; m--) {
+                    for (i32 m = 7; m > k; m--) {
                         top_score[m] = top_score[m - 1];
                         top_enc[m] = top_enc[m - 1];
                     }
@@ -954,7 +956,7 @@ public class Level4 implements MoveGenerator {
         }
         b2.start_search(300000);
         i32 best_val = -999999;
-        for (i32 k = 0; k < 5; k++) {
+        for (i32 k = 0; k < 8; k++) {
             if (top_enc[k] < 0) {
                 break;
             }
@@ -1085,8 +1087,10 @@ public class Level5 implements MoveGenerator {
         i32 my_atari_max = gres[4];
         i32 opp_atari_max = gres[5];
         
-        // 2026-11-05 概率控制：只有 prioritize_rescue 时才做完整 rescue 搜索
-        if (my_atari_cnt > 0 && prioritize_rescue) {
+        // 2026-11-05: always enter rescue analysis when a friendly group is
+        // in atari. The old 60% probability made LV5 ignore 40% of ataris,
+        // which is why it lost to LV4 when playing White.
+        if (my_atari_cnt > 0) {
             debug_log_i32(1, "L5", "atari detected, max_size", my_atari_max);
             // Try to find rescue moves for atari groups
             // A rescue move either: captures the attacking stones, or extends liberties
