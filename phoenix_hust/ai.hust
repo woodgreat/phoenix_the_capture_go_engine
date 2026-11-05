@@ -1617,7 +1617,7 @@ public class Level7 implements MoveGenerator {
         // iterative deepening: 2..5 ply
         i32 best_enc = -1;
         i32 best_val = -999999;
-        for (i32 dd = 4; dd <= 7; dd++) {
+        for (i32 dd = 5; dd <= 8; dd++) {
             i32 round_enc = -1;
             i32 round_val = -999999;
             bool round_complete = true;
@@ -1686,7 +1686,13 @@ public class Level7 implements MoveGenerator {
                 }
             }
             if (!round_complete || b2.search_nodes > b2.search_budget) {
-                // This round did not finish; keep the previous complete round.
+                // This round did not finish. Keep the previous complete round
+                // if there is one; otherwise keep this first round's partial
+                // result. Falling back to A1 here would be far worse.
+                if (best_enc < 0 && round_enc >= 0) {
+                    best_enc = round_enc;
+                    best_val = round_val;
+                }
                 break;
             }
             best_enc = round_enc;
@@ -1840,7 +1846,13 @@ public class Level8 implements MoveGenerator {
                 }
             }
             if (!round_complete || b2.search_nodes > b2.search_budget) {
-                // This round did not finish; keep the previous complete round.
+                // This round did not finish. Keep the previous complete round
+                // if there is one; otherwise keep this first round's partial
+                // result. Falling back to A1 here would be far worse.
+                if (best_enc < 0 && round_enc >= 0) {
+                    best_enc = round_enc;
+                    best_val = round_val;
+                }
                 break;
             }
             best_enc = round_enc;
@@ -1976,7 +1988,13 @@ public class Level9 implements MoveGenerator {
                 }
             }
             if (!round_complete || b2.search_nodes > b2.search_budget) {
-                // This round did not finish; keep the previous complete round.
+                // This round did not finish. Keep the previous complete round
+                // if there is one; otherwise keep this first round's partial
+                // result. Falling back to A1 here would be far worse.
+                if (best_enc < 0 && round_enc >= 0) {
+                    best_enc = round_enc;
+                    best_val = round_val;
+                }
                 break;
             }
             best_enc = round_enc;
@@ -2113,7 +2131,13 @@ public class Level10 implements MoveGenerator {
                 }
             }
             if (!round_complete || b2.search_nodes > b2.search_budget) {
-                // This round did not finish; keep the previous complete round.
+                // This round did not finish. Keep the previous complete round
+                // if there is one; otherwise keep this first round's partial
+                // result. Falling back to A1 here would be far worse.
+                if (best_enc < 0 && round_enc >= 0) {
+                    best_enc = round_enc;
+                    best_val = round_val;
+                }
                 break;
             }
             best_enc = round_enc;
