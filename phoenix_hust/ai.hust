@@ -1500,7 +1500,7 @@ public class Level6 implements MoveGenerator {
                     bool alive = b2.count_liberties(x, y) > 0;
                     i32 val = -999999;
                     // 2026-11-05 概率控制：不允许弃子时，跳过危险点
-                    if (!allow_sacrifice && !alive) {
+                    if (!allow_sacrifice && !alive && cap == 0) {
                         for (i32 i = 0; i < 13; i++) {
                             for (i32 j = 0; j < 13; j++) {
                                 b2.set(i, j, snap[i][j]);
@@ -1508,7 +1508,7 @@ public class Level6 implements MoveGenerator {
                         }
                         continue;
                     }
-                    if (alive && !(is_ko && cap == 1 && !analyze_ko)) {
+                    if (alive && !(is_ko && cap == 1)) {
                         val = b2.minimax(4, opp, color, -999999, 999999);
                     }
                     for (i32 i = 0; i < 13; i++) {
@@ -1544,8 +1544,16 @@ public class Level6 implements MoveGenerator {
                 }
             }
             if (n_all > 0) {
-                best_enc = all_empty[b2.rand_below(n_all)];
-                debug_log_i32(1, "L5", "filling random", best_enc);
+                // Try empty points one by one until a legal one is found.
+                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
+                    i32 candidate = all_empty[idx];
+                    i32 cx = candidate / 13;
+                    i32 cy = candidate - cx * 13;
+                    if (b2.is_legal_placement(cx, cy, color)) {
+                        best_enc = candidate;
+                    }
+                }
+                debug_log_i32(1, "L5", "filling legal", best_enc);
             } else {
                 this.last_x = -1;
                 this.last_y = -1;
@@ -1635,7 +1643,7 @@ public class Level7 implements MoveGenerator {
                         bool alive = b2.count_liberties(x, y) > 0;
                         i32 val = -999999;
                         // 2026-11-05 概率控制：不允许弃子时，跳过危险点
-                        if (!allow_sacrifice && !alive) {
+                        if (!allow_sacrifice && !alive && cap == 0) {
                             for (i32 i = 0; i < 13; i++) {
                                 for (i32 j = 0; j < 13; j++) {
                                     b2.set(i, j, snap[i][j]);
@@ -1643,7 +1651,7 @@ public class Level7 implements MoveGenerator {
                             }
                             continue;
                         }
-                        if (alive && !(is_ko && cap == 1 && !analyze_ko)) {
+                        if (alive && !(is_ko && cap == 1)) {
                             val = b2.minimax(dd - 1, opp, color, -999999, 999999);
                         // 2026-11-05 de-homogenization: add random noise to break determinism
                         val = val + b2.rand_below(401) - 200;
@@ -1682,8 +1690,16 @@ public class Level7 implements MoveGenerator {
                 }
             }
             if (n_all > 0) {
-                best_enc = all_empty[b2.rand_below(n_all)];
-                debug_log_i32(1, "L5", "filling random", best_enc);
+                // Try empty points one by one until a legal one is found.
+                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
+                    i32 candidate = all_empty[idx];
+                    i32 cx = candidate / 13;
+                    i32 cy = candidate - cx * 13;
+                    if (b2.is_legal_placement(cx, cy, color)) {
+                        best_enc = candidate;
+                    }
+                }
+                debug_log_i32(1, "L5", "filling legal", best_enc);
             } else {
                 this.last_x = -1;
                 this.last_y = -1;
@@ -1769,7 +1785,7 @@ public class Level8 implements MoveGenerator {
                         bool alive = b2.count_liberties(x, y) > 0;
                         i32 val = -999999;
                         // 2026-11-05 概率控制：不允许弃子时，跳过危险点
-                        if (!allow_sacrifice && !alive) {
+                        if (!allow_sacrifice && !alive && cap == 0) {
                             for (i32 i = 0; i < 13; i++) {
                                 for (i32 j = 0; j < 13; j++) {
                                     b2.set(i, j, snap[i][j]);
@@ -1777,7 +1793,7 @@ public class Level8 implements MoveGenerator {
                             }
                             continue;
                         }
-                        if (alive && !(is_ko && cap == 1 && !analyze_ko)) {
+                        if (alive && !(is_ko && cap == 1)) {
                             val = b2.minimax(dd - 1, opp, color, -999999, 999999);
                         // 2026-11-05 de-homogenization: add random noise to break determinism
                         val = val + b2.rand_below(401) - 200;
@@ -1816,8 +1832,16 @@ public class Level8 implements MoveGenerator {
                 }
             }
             if (n_all > 0) {
-                best_enc = all_empty[b2.rand_below(n_all)];
-                debug_log_i32(1, "L5", "filling random", best_enc);
+                // Try empty points one by one until a legal one is found.
+                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
+                    i32 candidate = all_empty[idx];
+                    i32 cx = candidate / 13;
+                    i32 cy = candidate - cx * 13;
+                    if (b2.is_legal_placement(cx, cy, color)) {
+                        best_enc = candidate;
+                    }
+                }
+                debug_log_i32(1, "L5", "filling legal", best_enc);
             } else {
                 this.last_x = -1;
                 this.last_y = -1;
@@ -1932,8 +1956,16 @@ public class Level9 implements MoveGenerator {
                 }
             }
             if (n_all > 0) {
-                best_enc = all_empty[b2.rand_below(n_all)];
-                debug_log_i32(1, "L5", "filling random", best_enc);
+                // Try empty points one by one until a legal one is found.
+                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
+                    i32 candidate = all_empty[idx];
+                    i32 cx = candidate / 13;
+                    i32 cy = candidate - cx * 13;
+                    if (b2.is_legal_placement(cx, cy, color)) {
+                        best_enc = candidate;
+                    }
+                }
+                debug_log_i32(1, "L5", "filling legal", best_enc);
             } else {
                 this.last_x = -1;
                 this.last_y = -1;
@@ -2049,8 +2081,16 @@ public class Level10 implements MoveGenerator {
                 }
             }
             if (n_all > 0) {
-                best_enc = all_empty[b2.rand_below(n_all)];
-                debug_log_i32(1, "L5", "filling random", best_enc);
+                // Try empty points one by one until a legal one is found.
+                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
+                    i32 candidate = all_empty[idx];
+                    i32 cx = candidate / 13;
+                    i32 cy = candidate - cx * 13;
+                    if (b2.is_legal_placement(cx, cy, color)) {
+                        best_enc = candidate;
+                    }
+                }
+                debug_log_i32(1, "L5", "filling legal", best_enc);
             } else {
                 this.last_x = -1;
                 this.last_y = -1;
