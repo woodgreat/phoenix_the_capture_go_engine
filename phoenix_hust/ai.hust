@@ -1430,7 +1430,9 @@ public class Level5 implements MoveGenerator {
     }
 }
 
-// Level 6: alpha-beta search depth-3 (one ply deeper than Level5).
+// Level 6: selective alpha-beta, depth 2 plies after the root, 10-wide.
+// 2026-11-06 Phase 2b: LV6-LV10 share Board.search_root(); only the
+// (depth, width, per-candidate budget, noise) tuple differs.
 public class Level6 implements MoveGenerator {
     i32 last_x;
     i32 last_y;
@@ -1452,90 +1454,12 @@ public class Level6 implements MoveGenerator {
         Board b2 = new Board();
         b2.copy_from(board);
         debug_log_i32(1, "L6", "genmove color", color);
-        i32 opp = b2.opponent(color);
-        i32 best_enc = -1;
-        i32 best_val = -999999;
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        
-        // 2026-11-05 概率控制：获取本等级的战术启用概率
-        i32 sac_prob = get_sacrifice_probability(6);
-        i32 rescue_prob = get_rescue_probability(6);
-        i32 ko_prob = get_ko_analysis_probability(6);
-        bool allow_sacrifice = roll_probability(b2.rand_below(100), sac_prob);
-        bool prioritize_rescue = roll_probability(b2.rand_below(100), rescue_prob);
-        bool analyze_ko = roll_probability(b2.rand_below(100), ko_prob);
-        
-        b2.start_search(400000);
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
-                // 2026-11-04 fix: stop scanning once the search budget is spent.
-                // Without this check the outer loop keeps calling minimax for every
-                // remaining empty point; each call pays the full snapshot/restore
-                // cost even though minimax immediately bails via the budget check.
-                if (b2.search_nodes > b2.search_budget) {
-                    break;
-                }
-                if (b2.get(x, y) == 0) {
-                    bool is_ko = b2.is_ko_point(x, y);
-                    i32[13][13] snap = {0};
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
-                            snap[i][j] = b2.get(i, j);
-                        }
-                    }
-                    b2.set(x, y, color);
-                    i32 cap = 0;
-                    for (i32 d = 0; d < 4; d++) {
-                        i32 nx = x + dxs[d];
-                        i32 ny = y + dys[d];
-                        if (b2.is_valid(nx, ny)) {
-                            if (b2.get(nx, ny) == opp) {
-                                if (b2.count_liberties(nx, ny) == 0) {
-                                    cap = cap + b2.remove_group(nx, ny);
-                                }
-                            }
-                        }
-                    }
-                    bool alive = b2.count_liberties(x, y) > 0;
-                    i32 val = -999999;
-                    // 2026-11-05 概率控制：不允许弃子时，跳过危险点
-                    if (!allow_sacrifice && !alive && cap == 0) {
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                b2.set(i, j, snap[i][j]);
-                            }
-                        }
-                        continue;
-                    }
-                    if (alive && !(is_ko && cap == 1)) {
-                        val = b2.minimax(4, opp, color, -999999, 999999);
-                        // 2026-11-05 de-homogenization noise.
-                        val = val + b2.rand_below(401) - 200;
-                    }
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
-                            b2.set(i, j, snap[i][j]);
-                        }
-                    }
-                    if (val > best_val) {
-                        best_val = val;
-                        best_enc = x * 13 + y;
-                    } else if (val >= best_val - 2000 && val > -999999) {
-                        // 2026-11-05 de-homogenization: near-equal moves are
-                        // randomly interchangeable to break identical replays.
-                        if (b2.rand_below(2) == 0) {
-                            best_enc = x * 13 + y;
-                        }
-                    }
-                }
-            }
-            if (b2.search_nodes > b2.search_budget) {
-                break;
-            }
-        }
-        if (best_enc < 0) {
-            // Wood rules forbid passing: fill any empty point (random)
+        // 2026-11-06 Phase 2b: unified selective-search root.
+        // depth / width / per-candidate budget / noise are the only
+        // per-level knobs, so LV6-LV10 can no longer drift apart.
+        i32 enc = b2.search_root(color, 10, 2, 10, 4000, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal empty point.
             i32[169] all_empty = {0};
             i32 n_all = 0;
             for (i32 x = 0; x < 13; x++) {
@@ -1546,25 +1470,22 @@ public class Level6 implements MoveGenerator {
                     }
                 }
             }
-            if (n_all > 0) {
-                // Try empty points one by one until a legal one is found.
-                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
-                    i32 candidate = all_empty[idx];
-                    i32 cx = candidate / 13;
-                    i32 cy = candidate - cx * 13;
-                    if (b2.is_legal_placement(cx, cy, color)) {
-                        best_enc = candidate;
-                    }
+            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
+                i32 candidate = all_empty[idx];
+                i32 cx = candidate / 13;
+                i32 cy = candidate - cx * 13;
+                if (b2.is_legal_placement(cx, cy, color)) {
+                    enc = candidate;
                 }
-                debug_log_i32(1, "L5", "filling legal", best_enc);
-            } else {
+            }
+            if (enc < 0) {
                 this.last_x = -1;
                 this.last_y = -1;
                 return b2;
             }
         }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;
@@ -1577,10 +1498,10 @@ public class Level6 implements MoveGenerator {
     }
 }
 
-// Level 7: iterative deepening (depth 2..5) + node budget.
+// Level 7: selective alpha-beta, depth 2 plies after the root, 14-wide.
 // Wood Capture Go forbids passing: the engine always returns a real move.
-// Level7 returns -1 only when there is genuinely no legal point
-// (theoretically unreachable on a 13x13 board).
+// All LV6-LV10 levels return -1 only when there is genuinely no legal
+// point (theoretically unreachable on a 13x13 board).
 public class Level7 implements MoveGenerator {
     i32 last_x;
     i32 last_y;
@@ -1602,104 +1523,12 @@ public class Level7 implements MoveGenerator {
         Board b2 = new Board();
         b2.copy_from(board);
         debug_log_i32(1, "L7", "genmove color", color);
-        i32 opp = b2.opponent(color);
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        
-        // 2026-11-05 概率控制：获取本等级的战术启用概率
-        i32 sac_prob = get_sacrifice_probability(7);
-        i32 rescue_prob = get_rescue_probability(7);
-        i32 ko_prob = get_ko_analysis_probability(7);
-        bool allow_sacrifice = roll_probability(b2.rand_below(100), sac_prob);
-        bool prioritize_rescue = roll_probability(b2.rand_below(100), rescue_prob);
-        bool analyze_ko = roll_probability(b2.rand_below(100), ko_prob);
-        
-        // iterative deepening: 2..5 ply
-        i32 best_enc = -1;
-        i32 best_val = -999999;
-        for (i32 dd = 5; dd <= 8; dd++) {
-            i32 round_enc = -1;
-            i32 round_val = -999999;
-            bool round_complete = true;
-            // Split the total budget across the four rounds.
-            b2.start_search(125000);
-            for (i32 x = 0; x < 13; x++) {
-                if (b2.search_nodes > b2.search_budget) {
-                    round_complete = false;
-                    break;
-                }
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        bool is_ko = b2.is_ko_point(x, y);
-                        i32[13][13] snap = {0};
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                snap[i][j] = b2.get(i, j);
-                            }
-                        }
-                        b2.set(x, y, color);
-                        i32 cap = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) == opp) {
-                                    if (b2.count_liberties(nx, ny) == 0) {
-                                        cap = cap + b2.remove_group(nx, ny);
-                                    }
-                                }
-                            }
-                        }
-                        bool alive = b2.count_liberties(x, y) > 0;
-                        i32 val = -999999;
-                        // 2026-11-05 概率控制：不允许弃子时，跳过危险点
-                        if (!allow_sacrifice && !alive && cap == 0) {
-                            for (i32 i = 0; i < 13; i++) {
-                                for (i32 j = 0; j < 13; j++) {
-                                    b2.set(i, j, snap[i][j]);
-                                }
-                            }
-                            continue;
-                        }
-                        if (alive && !(is_ko && cap == 1)) {
-                            val = b2.minimax(dd - 1, opp, color, -999999, 999999);
-                        // 2026-11-05 de-homogenization: add random noise to break determinism
-                        val = val + b2.rand_below(401) - 200;
-                        }
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                b2.set(i, j, snap[i][j]);
-                            }
-                        }
-                        if (val > round_val) {
-                            round_val = val;
-                            round_enc = x * 13 + y;
-                        } else if (val >= round_val - 2000 && val > -999999) {
-                            // 2026-11-05 de-homogenization: near-equal moves
-                            // are randomly interchangeable, so identical games
-                            // do not replay move-for-move.
-                            if (b2.rand_below(2) == 0) {
-                                round_enc = x * 13 + y;
-                            }
-                        }
-                    }
-                }
-            }
-            if (!round_complete || b2.search_nodes > b2.search_budget) {
-                // This round did not finish. Keep the previous complete round
-                // if there is one; otherwise keep this first round's partial
-                // result. Falling back to A1 here would be far worse.
-                if (best_enc < 0 && round_enc >= 0) {
-                    best_enc = round_enc;
-                    best_val = round_val;
-                }
-                break;
-            }
-            best_enc = round_enc;
-            best_val = round_val;
-        }
-        if (best_enc < 0) {
-            // Wood rules forbid passing: fill any empty point (random)
+        // 2026-11-06 Phase 2b: unified selective-search root.
+        // depth / width / per-candidate budget / noise are the only
+        // per-level knobs, so LV6-LV10 can no longer drift apart.
+        i32 enc = b2.search_root(color, 14, 2, 10, 8000, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal empty point.
             i32[169] all_empty = {0};
             i32 n_all = 0;
             for (i32 x = 0; x < 13; x++) {
@@ -1710,25 +1539,22 @@ public class Level7 implements MoveGenerator {
                     }
                 }
             }
-            if (n_all > 0) {
-                // Try empty points one by one until a legal one is found.
-                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
-                    i32 candidate = all_empty[idx];
-                    i32 cx = candidate / 13;
-                    i32 cy = candidate - cx * 13;
-                    if (b2.is_legal_placement(cx, cy, color)) {
-                        best_enc = candidate;
-                    }
+            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
+                i32 candidate = all_empty[idx];
+                i32 cx = candidate / 13;
+                i32 cy = candidate - cx * 13;
+                if (b2.is_legal_placement(cx, cy, color)) {
+                    enc = candidate;
                 }
-                debug_log_i32(1, "L5", "filling legal", best_enc);
-            } else {
+            }
+            if (enc < 0) {
                 this.last_x = -1;
                 this.last_y = -1;
                 return b2;
             }
         }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;
@@ -1741,7 +1567,7 @@ public class Level7 implements MoveGenerator {
     }
 }
 
-// Level 8: iterative deepening depth 2..6 + larger budget (500k).
+// Level 8: selective alpha-beta, depth 2 plies after the root, 18-wide.
 public class Level8 implements MoveGenerator {
     i32 last_x;
     i32 last_y;
@@ -1763,103 +1589,12 @@ public class Level8 implements MoveGenerator {
         Board b2 = new Board();
         b2.copy_from(board);
         debug_log_i32(1, "L8", "genmove color", color);
-        i32 opp = b2.opponent(color);
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        
-        // 2026-11-05 概率控制：获取本等级的战术启用概率
-        i32 sac_prob = get_sacrifice_probability(8);
-        i32 rescue_prob = get_rescue_probability(8);
-        i32 ko_prob = get_ko_analysis_probability(8);
-        bool allow_sacrifice = roll_probability(b2.rand_below(100), sac_prob);
-        bool prioritize_rescue = roll_probability(b2.rand_below(100), rescue_prob);
-        bool analyze_ko = roll_probability(b2.rand_below(100), ko_prob);
-        
-        i32 best_enc = -1;
-        i32 best_val = -999999;
-        for (i32 dd = 5; dd <= 8; dd++) {
-            i32 round_enc = -1;
-            i32 round_val = -999999;
-            bool round_complete = true;
-            // Split the total budget across the four rounds.
-            b2.start_search(150000);
-            for (i32 x = 0; x < 13; x++) {
-                if (b2.search_nodes > b2.search_budget) {
-                    round_complete = false;
-                    break;
-                }
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        bool is_ko = b2.is_ko_point(x, y);
-                        i32[13][13] snap = {0};
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                snap[i][j] = b2.get(i, j);
-                            }
-                        }
-                        b2.set(x, y, color);
-                        i32 cap = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) == opp) {
-                                    if (b2.count_liberties(nx, ny) == 0) {
-                                        cap = cap + b2.remove_group(nx, ny);
-                                    }
-                                }
-                            }
-                        }
-                        bool alive = b2.count_liberties(x, y) > 0;
-                        i32 val = -999999;
-                        // 2026-11-05 概率控制：不允许弃子时，跳过危险点
-                        if (!allow_sacrifice && !alive && cap == 0) {
-                            for (i32 i = 0; i < 13; i++) {
-                                for (i32 j = 0; j < 13; j++) {
-                                    b2.set(i, j, snap[i][j]);
-                                }
-                            }
-                            continue;
-                        }
-                        if (alive && !(is_ko && cap == 1)) {
-                            val = b2.minimax(dd - 1, opp, color, -999999, 999999);
-                        // 2026-11-05 de-homogenization: add random noise to break determinism
-                        val = val + b2.rand_below(401) - 200;
-                        }
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                b2.set(i, j, snap[i][j]);
-                            }
-                        }
-                        if (val > round_val) {
-                            round_val = val;
-                            round_enc = x * 13 + y;
-                        } else if (val >= round_val - 2000 && val > -999999) {
-                            // 2026-11-05 de-homogenization: near-equal moves
-                            // are randomly interchangeable, so identical games
-                            // do not replay move-for-move.
-                            if (b2.rand_below(2) == 0) {
-                                round_enc = x * 13 + y;
-                            }
-                        }
-                    }
-                }
-            }
-            if (!round_complete || b2.search_nodes > b2.search_budget) {
-                // This round did not finish. Keep the previous complete round
-                // if there is one; otherwise keep this first round's partial
-                // result. Falling back to A1 here would be far worse.
-                if (best_enc < 0 && round_enc >= 0) {
-                    best_enc = round_enc;
-                    best_val = round_val;
-                }
-                break;
-            }
-            best_enc = round_enc;
-            best_val = round_val;
-        }
-        if (best_enc < 0) {
-            // Wood rules forbid passing: fill any empty point (random)
+        // 2026-11-06 Phase 2b: unified selective-search root.
+        // depth / width / per-candidate budget / noise are the only
+        // per-level knobs, so LV6-LV10 can no longer drift apart.
+        i32 enc = b2.search_root(color, 18, 2, 12, 12000, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal empty point.
             i32[169] all_empty = {0};
             i32 n_all = 0;
             for (i32 x = 0; x < 13; x++) {
@@ -1870,25 +1605,22 @@ public class Level8 implements MoveGenerator {
                     }
                 }
             }
-            if (n_all > 0) {
-                // Try empty points one by one until a legal one is found.
-                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
-                    i32 candidate = all_empty[idx];
-                    i32 cx = candidate / 13;
-                    i32 cy = candidate - cx * 13;
-                    if (b2.is_legal_placement(cx, cy, color)) {
-                        best_enc = candidate;
-                    }
+            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
+                i32 candidate = all_empty[idx];
+                i32 cx = candidate / 13;
+                i32 cy = candidate - cx * 13;
+                if (b2.is_legal_placement(cx, cy, color)) {
+                    enc = candidate;
                 }
-                debug_log_i32(1, "L5", "filling legal", best_enc);
-            } else {
+            }
+            if (enc < 0) {
                 this.last_x = -1;
                 this.last_y = -1;
                 return b2;
             }
         }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;
@@ -1901,7 +1633,7 @@ public class Level8 implements MoveGenerator {
     }
 }
 
-// Level 9: iterative deepening depth 2..6 + large budget (800k).
+// Level 9: selective alpha-beta, depth 4 plies after the root, 14-wide.
 public class Level9 implements MoveGenerator {
     i32 last_x;
     i32 last_y;
@@ -1923,85 +1655,12 @@ public class Level9 implements MoveGenerator {
         Board b2 = new Board();
         b2.copy_from(board);
         debug_log_i32(1, "L9", "genmove color", color);
-        i32 opp = b2.opponent(color);
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        i32 best_enc = -1;
-        i32 best_val = -999999;
-        for (i32 dd = 6; dd <= 9; dd++) {
-            i32 round_enc = -1;
-            i32 round_val = -999999;
-            bool round_complete = true;
-            // Split the total budget across the four rounds.
-            b2.start_search(175000);
-            for (i32 x = 0; x < 13; x++) {
-                if (b2.search_nodes > b2.search_budget) {
-                    round_complete = false;
-                    break;
-                }
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        bool is_ko = b2.is_ko_point(x, y);
-                        i32[13][13] snap = {0};
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                snap[i][j] = b2.get(i, j);
-                            }
-                        }
-                        b2.set(x, y, color);
-                        i32 cap = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) == opp) {
-                                    if (b2.count_liberties(nx, ny) == 0) {
-                                        cap = cap + b2.remove_group(nx, ny);
-                                    }
-                                }
-                            }
-                        }
-                        bool alive = b2.count_liberties(x, y) > 0;
-                        i32 val = -999999;
-                        if (alive && !(is_ko && cap == 1)) {
-                            val = b2.minimax(dd - 1, opp, color, -999999, 999999);
-                        // 2026-11-05 de-homogenization: add random noise to break determinism
-                        val = val + b2.rand_below(401) - 200;
-                        }
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                b2.set(i, j, snap[i][j]);
-                            }
-                        }
-                        if (val > round_val) {
-                            round_val = val;
-                            round_enc = x * 13 + y;
-                        } else if (val >= round_val - 2000 && val > -999999) {
-                            // 2026-11-05 de-homogenization: near-equal moves
-                            // are randomly interchangeable, so identical games
-                            // do not replay move-for-move.
-                            if (b2.rand_below(2) == 0) {
-                                round_enc = x * 13 + y;
-                            }
-                        }
-                    }
-                }
-            }
-            if (!round_complete || b2.search_nodes > b2.search_budget) {
-                // This round did not finish. Keep the previous complete round
-                // if there is one; otherwise keep this first round's partial
-                // result. Falling back to A1 here would be far worse.
-                if (best_enc < 0 && round_enc >= 0) {
-                    best_enc = round_enc;
-                    best_val = round_val;
-                }
-                break;
-            }
-            best_enc = round_enc;
-            best_val = round_val;
-        }
-        if (best_enc < 0) {
-            // Wood rules forbid passing: fill any empty point (random)
+        // 2026-11-06 Phase 2b: unified selective-search root.
+        // depth / width / per-candidate budget / noise are the only
+        // per-level knobs, so LV6-LV10 can no longer drift apart.
+        i32 enc = b2.search_root(color, 24, 2, 14, 20000, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal empty point.
             i32[169] all_empty = {0};
             i32 n_all = 0;
             for (i32 x = 0; x < 13; x++) {
@@ -2012,25 +1671,22 @@ public class Level9 implements MoveGenerator {
                     }
                 }
             }
-            if (n_all > 0) {
-                // Try empty points one by one until a legal one is found.
-                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
-                    i32 candidate = all_empty[idx];
-                    i32 cx = candidate / 13;
-                    i32 cy = candidate - cx * 13;
-                    if (b2.is_legal_placement(cx, cy, color)) {
-                        best_enc = candidate;
-                    }
+            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
+                i32 candidate = all_empty[idx];
+                i32 cx = candidate / 13;
+                i32 cy = candidate - cx * 13;
+                if (b2.is_legal_placement(cx, cy, color)) {
+                    enc = candidate;
                 }
-                debug_log_i32(1, "L5", "filling legal", best_enc);
-            } else {
+            }
+            if (enc < 0) {
                 this.last_x = -1;
                 this.last_y = -1;
                 return b2;
             }
         }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;
@@ -2043,8 +1699,7 @@ public class Level9 implements MoveGenerator {
     }
 }
 
-// Level 10: same engine as Level 7 with deeper iteration (2..7) and a
-// larger node budget.
+// Level 10: selective alpha-beta, depth 4 plies after the root, 20-wide.
 public class Level10 implements MoveGenerator {
     i32 last_x;
     i32 last_y;
@@ -2066,85 +1721,12 @@ public class Level10 implements MoveGenerator {
         Board b2 = new Board();
         b2.copy_from(board);
         debug_log_i32(1, "L10", "genmove color", color);
-        i32 opp = b2.opponent(color);
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        i32 best_enc = -1;
-        i32 best_val = -999999;
-        for (i32 dd = 7; dd <= 10; dd++) {
-            i32 round_enc = -1;
-            i32 round_val = -999999;
-            bool round_complete = true;
-            // Split the total budget across the four rounds.
-            b2.start_search(200000);
-            for (i32 x = 0; x < 13; x++) {
-                if (b2.search_nodes > b2.search_budget) {
-                    round_complete = false;
-                    break;
-                }
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        bool is_ko = b2.is_ko_point(x, y);
-                        i32[13][13] snap = {0};
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                snap[i][j] = b2.get(i, j);
-                            }
-                        }
-                        b2.set(x, y, color);
-                        i32 cap = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) == opp) {
-                                    if (b2.count_liberties(nx, ny) == 0) {
-                                        cap = cap + b2.remove_group(nx, ny);
-                                    }
-                                }
-                            }
-                        }
-                        bool alive = b2.count_liberties(x, y) > 0;
-                        i32 val = -999999;
-                        if (alive && !(is_ko && cap == 1)) {
-                            val = b2.minimax(dd - 1, opp, color, -999999, 999999);
-                        // 2026-11-05 de-homogenization: add random noise to break determinism
-                        val = val + b2.rand_below(401) - 200;
-                        }
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                b2.set(i, j, snap[i][j]);
-                            }
-                        }
-                        if (val > round_val) {
-                            round_val = val;
-                            round_enc = x * 13 + y;
-                        } else if (val >= round_val - 2000 && val > -999999) {
-                            // 2026-11-05 de-homogenization: near-equal moves
-                            // are randomly interchangeable, so identical games
-                            // do not replay move-for-move.
-                            if (b2.rand_below(2) == 0) {
-                                round_enc = x * 13 + y;
-                            }
-                        }
-                    }
-                }
-            }
-            if (!round_complete || b2.search_nodes > b2.search_budget) {
-                // This round did not finish. Keep the previous complete round
-                // if there is one; otherwise keep this first round's partial
-                // result. Falling back to A1 here would be far worse.
-                if (best_enc < 0 && round_enc >= 0) {
-                    best_enc = round_enc;
-                    best_val = round_val;
-                }
-                break;
-            }
-            best_enc = round_enc;
-            best_val = round_val;
-        }
-        if (best_enc < 0) {
-            // Wood rules forbid passing: fill any empty point (random)
+        // 2026-11-06 Phase 2b: unified selective-search root.
+        // depth / width / per-candidate budget / noise are the only
+        // per-level knobs, so LV6-LV10 can no longer drift apart.
+        i32 enc = b2.search_root(color, 24, 2, 18, 30000, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal empty point.
             i32[169] all_empty = {0};
             i32 n_all = 0;
             for (i32 x = 0; x < 13; x++) {
@@ -2155,25 +1737,22 @@ public class Level10 implements MoveGenerator {
                     }
                 }
             }
-            if (n_all > 0) {
-                // Try empty points one by one until a legal one is found.
-                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
-                    i32 candidate = all_empty[idx];
-                    i32 cx = candidate / 13;
-                    i32 cy = candidate - cx * 13;
-                    if (b2.is_legal_placement(cx, cy, color)) {
-                        best_enc = candidate;
-                    }
+            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
+                i32 candidate = all_empty[idx];
+                i32 cx = candidate / 13;
+                i32 cy = candidate - cx * 13;
+                if (b2.is_legal_placement(cx, cy, color)) {
+                    enc = candidate;
                 }
-                debug_log_i32(1, "L5", "filling legal", best_enc);
-            } else {
+            }
+            if (enc < 0) {
                 this.last_x = -1;
                 this.last_y = -1;
                 return b2;
             }
         }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;

@@ -48,6 +48,20 @@ public class Board {
     i32 search_nodes;
     i32 search_budget;
 
+    // === Selective search scratch (2026-11-06 Phase 2b) ===
+    // lib_map[cell] = liberty count of the group that owns that cell.
+    // Filled by build_liberty_map(); used ONLY for move ordering, so it is
+    // never part of the position and does not need saving/restoring.
+    i32[] lib_map;
+    // Candidate list produced by select_children() for the CURRENT node.
+    // minimax_sel copies it into a local array before recursing, because a
+    // deeper node overwrites these fields.
+    i32[] child_buf;
+    i32 child_n;
+    // Set to 1 when a search bails out because the node budget is spent.
+    // search_root uses it to tell "completed" from "truncated" rounds.
+    i32 search_cutoff;
+
     // Simple ko: point of the last single-stone capture (-1 = no ko).
     // The side to move may not capture exactly one stone at this point
     // (immediate recapture would repeat the position).
@@ -107,6 +121,8 @@ public class Board {
         this.rng_seed = (i32)(std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_nanos() % 2147483647);
         this.search_nodes = 0;
         this.search_budget = 300000;
+        this.child_n = 0;
+        this.search_cutoff = 0;
         this.capture_history_len = 0;
         // Initialize TT arrays (2026-10-10)
         this.init_search_tables();
@@ -132,6 +148,17 @@ public class Board {
                 v = -v;
             }
             this.zobrist_table.push(v);
+        }
+        // Selective-search scratch (2026-11-06): fixed-size 1-D array
+        // fields make the Hust default initializer emit `grid: [0; 13]`,
+        // which does not compile, so these are dynamic arrays instead.
+        this.lib_map.clear();
+        for (i32 i = 0; i < 169; i++) {
+            this.lib_map.push(0);
+        }
+        this.child_buf.clear();
+        for (i32 i = 0; i < 24; i++) {
+            this.child_buf.push(0);
         }
         // TT arrays: 256 entries each
         for (i32 i = 0; i < 256; i++) {
@@ -163,6 +190,8 @@ public class Board {
         // exactly the LV7-LV10 homogenization bug we are fixing.
         this.search_nodes = src.search_nodes;
         this.search_budget = src.search_budget;
+        this.child_n = src.child_n;
+        this.search_cutoff = src.search_cutoff;
         this.ko_x = src.ko_x;
         this.ko_y = src.ko_y;
         this.game_over_state = src.game_over_state;
@@ -1066,6 +1095,446 @@ public class Board {
         return score / 2;  // each edge counted twice (from both ends)
     }
 
+    // === Selective search (2026-11-06 Phase 2b) ===
+    //
+    // Why this exists: the original LV6-LV10 loop scanned all 169 empty
+    // points and ran minimax on each one under a single global node budget.
+    // The first point alone consumed the whole budget, every later point
+    // degraded to a static evaluation, and the AI emitted A13/A12/... --
+    // the first points of the scan order. The fix is (a) rank candidates
+    // cheaply at the root, (b) give every candidate the same node budget,
+    // and (c) keep only the top-K children inside the tree so a real depth
+    // of 3-5 fits in the budget.
+
+    // Per-stone liberty counts. Flood-fills every group once and writes the
+    // group's liberty count into lib_map for each of its stones.
+    // Uses a stamp trick so the "seen liberty" array never has to be cleared.
+    public void build_liberty_map() {
+        i32[169] seen = {0};
+        i32[169] mark = {0};
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        i32[] stack;
+        i32[] group;
+        i32[] libs;
+        i32 stamp = 0;
+        for (i32 i = 0; i < 169; i++) {
+            this.lib_map[i] = 0;
+        }
+        for (i32 sx = 0; sx < 13; sx++) {
+            for (i32 sy = 0; sy < 13; sy++) {
+                i32 c0 = this.grid[sx][sy];
+                if (c0 != 0 && seen[sx * 13 + sy] == 0) {
+                    stamp = stamp + 1;
+                    stack.clear();
+                    group.clear();
+                    libs.clear();
+                    stack.push(sx * 13 + sy);
+                    seen[sx * 13 + sy] = 1;
+                    while (stack.len() > (usize)0) {
+                        i32 code = stack[stack.len() - (usize)1];
+                        stack.truncate(stack.len() - (usize)1);
+                        group.push(code);
+                        i32 cx = code / 13;
+                        i32 cy = code - cx * 13;
+                        for (i32 d = 0; d < 4; d++) {
+                            i32 nx = cx + dxs[d];
+                            i32 ny = cy + dys[d];
+                            if (this.is_valid(nx, ny)) {
+                                i32 nc = this.grid[nx][ny];
+                                if (nc == 0) {
+                                    i32 lc = nx * 13 + ny;
+                                    if (mark[lc] != stamp) {
+                                        mark[lc] = stamp;
+                                        libs.push(lc);
+                                    }
+                                } else if (nc == c0 && seen[nx * 13 + ny] == 0) {
+                                    seen[nx * 13 + ny] = 1;
+                                    stack.push(nx * 13 + ny);
+                                }
+                            }
+                        }
+                    }
+                    i32 nl = libs.len() as i32;
+                    for (i32 gi = 0; gi < group.len(); gi++) {
+                        this.lib_map[group[gi] as usize] = nl;
+                    }
+                }
+            }
+        }
+    }
+
+    // Rank the current empty points for `color` and keep the best `width`.
+    // Ordering priorities (Capture Go): capture an enemy group in atari,
+    // then rescue an own group in atari, then normal contact plays.
+    // Ranking only -- legality is still enforced by the search itself.
+    public void select_children(i32 color, i32 width) {
+        i32[] cand;
+        i32[] sc;
+        i32[4] dxs = {0, 0, 1, -1};
+        i32[4] dys = {1, -1, 0, 0};
+        this.child_n = 0;
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (this.grid[x][y] == 0) {
+                    i32 score = 0;
+                    i32 empt = 0;
+                    i32 own = 0;
+                    i32 en = 0;
+                    i32 cap_adj = 0;
+                    i32 lib_after = 0;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 nx = x + dxs[d];
+                        i32 ny = y + dys[d];
+                        if (this.is_valid(nx, ny)) {
+                            i32 nc = this.grid[nx][ny];
+                            if (nc == 0) {
+                                empt = empt + 1;
+                            } else if (nc == color) {
+                                own = own + 1;
+                                if (this.lib_map[nx * 13 + ny] == 1) {
+                                    score = score + 900;
+                                } else if (this.lib_map[nx * 13 + ny] == 2) {
+                                    score = score + 60;
+                                    lib_after = lib_after + 1;
+                                } else {
+                                    lib_after = lib_after + 1;
+                                }
+                            } else {
+                                en = en + 1;
+                                if (this.lib_map[nx * 13 + ny] == 1) {
+                                    score = score + 2000;
+                                    cap_adj = 1;
+                                } else if (this.lib_map[nx * 13 + ny] == 2) {
+                                    score = score + 200;
+                                }
+                            }
+                        }
+                    }
+                    // approximate suicide filter: no empty neighbour, no own
+                    // group that keeps a liberty, and no capture either
+                    if (empt > 0 || lib_after > 0 || cap_adj == 1) {
+                        score = score + empt * 30 + own * 15 + en * 10;
+                        i32 ddx = x - 6;
+                        i32 ddy = y - 6;
+                        if (ddx < 0) {
+                            ddx = 0 - ddx;
+                        }
+                        if (ddy < 0) {
+                            ddy = 0 - ddy;
+                        }
+                        score = score + (12 - ddx - ddy) * 2;
+                        cand.push(x * 13 + y);
+                        sc.push(score);
+                    }
+                }
+            }
+        }
+        i32 n_all = cand.len() as i32;
+        i32 cap_n = width;
+        if (cap_n > 24) {
+            cap_n = 24;
+        }
+        if (cap_n > n_all) {
+            cap_n = n_all;
+        }
+        for (i32 k = 0; k < cap_n; k++) {
+            i32 bi = -1;
+            i32 bv = -999999;
+            for (i32 i = 0; i < n_all; i++) {
+                if (sc[i] > bv) {
+                    bv = sc[i];
+                    bi = i;
+                }
+            }
+            if (bi >= 0) {
+                this.child_buf[this.child_n] = cand[bi];
+                this.child_n = this.child_n + 1;
+                sc[bi] = -999999;
+            }
+        }
+    }
+
+    // Alpha-beta minimax over the top-`width` children of every node.
+    // Same contract as minimax() but branching is bounded, which is what
+    // makes depth 3-5 affordable. LV1-LV5 keep using minimax() unchanged.
+    public i32 minimax_sel(i32 depth, i32 color_to_move, i32 ai_color, i32 alpha_in, i32 beta_in, i32 width) {
+        i32 alpha = alpha_in;
+        i32 beta = beta_in;
+        this.search_nodes = this.search_nodes + 1;
+        if (depth <= 0 || this.search_nodes > this.search_budget) {
+            if (this.search_nodes > this.search_budget) {
+                this.search_cutoff = 1;
+            }
+            return this.evaluate_for(ai_color);
+        }
+        i32[13][13] snap = {0};
+        for (i32 i = 0; i < 13; i++) {
+            for (i32 j = 0; j < 13; j++) {
+                snap[i][j] = this.grid[i][j];
+            }
+        }
+        i32 save_ko_x = this.ko_x;
+        i32 save_ko_y = this.ko_y;
+        i32 save_bc = this.black_captures;
+        i32 save_wc = this.white_captures;
+        i32 save_mc = this.move_count;
+        this.build_liberty_map();
+        this.select_children(color_to_move, width);
+        // Copy the candidate list: recursion overwrites child_buf/child_n.
+        i32[24] sel = {0};
+        i32 nsel = this.child_n;
+        for (i32 i = 0; i < nsel; i++) {
+            sel[i] = this.child_buf[i];
+        }
+        bool maximizing = color_to_move == ai_color;
+        i32 best = INF;
+        if (maximizing) {
+            best = -INF;
+        }
+        bool any_move = false;
+        i32 opp = this.opponent(color_to_move);
+        for (i32 si = 0; si < nsel; si++) {
+            // 2026-11-06: same budget guard as minimax() -- do not keep
+            // calling the children once the budget is spent.
+            if (this.search_nodes > this.search_budget) {
+                break;
+            }
+            i32 x = sel[si] / 13;
+            i32 y = sel[si] - x * 13;
+            if (this.grid[x][y] == 0) {
+                this.grid[x][y] = color_to_move;
+                i32 cap = 0;
+                for (i32 d = 0; d < 4; d++) {
+                    i32 ax = x;
+                    i32 ay = y;
+                    if (d == 0) { ax = x + 1; }
+                    if (d == 1) { ax = x - 1; }
+                    if (d == 2) { ay = y + 1; }
+                    if (d == 3) { ay = y - 1; }
+                    if (this.is_valid(ax, ay)) {
+                        if (this.grid[ax][ay] == opp) {
+                            if (this.count_liberties(ax, ay) == 0) {
+                                cap = cap + this.remove_group(ax, ay);
+                            }
+                        }
+                    }
+                }
+                bool alive = this.count_liberties(x, y) > 0;
+                bool legal = alive || cap > 0;
+                if (this.is_ko_point(x, y) && cap == 1) {
+                    legal = false;
+                }
+                if (legal) {
+                    any_move = true;
+                    i32 val = this.minimax_sel(depth - 1, opp, ai_color, alpha, beta, width);
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            this.grid[i][j] = snap[i][j];
+                        }
+                    }
+                    this.ko_x = save_ko_x;
+                    this.ko_y = save_ko_y;
+                    this.black_captures = save_bc;
+                    this.white_captures = save_wc;
+                    this.move_count = save_mc;
+                    if (maximizing) {
+                        if (val > best) {
+                            best = val;
+                        }
+                        if (best > alpha) {
+                            alpha = best;
+                        }
+                    } else {
+                        if (val < best) {
+                            best = val;
+                        }
+                        if (best < beta) {
+                            beta = best;
+                        }
+                    }
+                    if (beta <= alpha) {
+                        return best;
+                    }
+                } else {
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            this.grid[i][j] = snap[i][j];
+                        }
+                    }
+                    this.ko_x = save_ko_x;
+                    this.ko_y = save_ko_y;
+                    this.black_captures = save_bc;
+                    this.white_captures = save_wc;
+                    this.move_count = save_mc;
+                }
+            }
+        }
+        if (!any_move) {
+            best = this.evaluate_for(ai_color);
+        }
+        return best;
+    }
+
+    // Root of the selective search. Ranks every legal move statically, keeps
+    // the best `width`, then searches each of them with an equal node budget.
+    // Returns an encoded point (x*13+y), or -1 when the board is full.
+    public i32 search_root(i32 color, i32 root_width, i32 depth, i32 child_width, i32 budget_per_candidate, i32 noise, i32 blunder) {
+        i32 opp = this.opponent(color);
+        i32[169] cand = {0};
+        i32[169] cval = {0};
+        i32[24] top = {0};
+        i32 n = 0;
+        i32[13][13] snap = {0};
+        i32 save_ko_x = this.ko_x;
+        i32 save_ko_y = this.ko_y;
+        i32 save_bc = this.black_captures;
+        i32 save_wc = this.white_captures;
+        i32 save_mc = this.move_count;
+        for (i32 k = 0; k < 24; k++) {
+            top[k] = -1;
+        }
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (this.grid[x][y] == 0) {
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            snap[i][j] = this.grid[i][j];
+                        }
+                    }
+                    this.grid[x][y] = color;
+                    i32 cap = 0;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 ax = x;
+                        i32 ay = y;
+                        if (d == 0) { ax = x + 1; }
+                        if (d == 1) { ax = x - 1; }
+                        if (d == 2) { ay = y + 1; }
+                        if (d == 3) { ay = y - 1; }
+                        if (this.is_valid(ax, ay)) {
+                            if (this.grid[ax][ay] == opp) {
+                                if (this.count_liberties(ax, ay) == 0) {
+                                    cap = cap + this.remove_group(ax, ay);
+                                }
+                            }
+                        }
+                    }
+                    bool alive = this.count_liberties(x, y) > 0;
+                    bool ok = alive || cap > 0;
+                    if (this.is_ko_point(x, y) && cap == 1) {
+                        ok = false;
+                    }
+                    if (ok) {
+                        i32 v = this.evaluate_for(color) + cap * 2000;
+                        cand[n] = x * 13 + y;
+                        cval[n] = v;
+                        n = n + 1;
+                    }
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            this.grid[i][j] = snap[i][j];
+                        }
+                    }
+                    this.ko_x = save_ko_x;
+                    this.ko_y = save_ko_y;
+                    this.black_captures = save_bc;
+                    this.white_captures = save_wc;
+                    this.move_count = save_mc;
+                }
+            }
+        }
+        i32 nsel = root_width;
+        if (nsel > 24) {
+            nsel = 24;
+        }
+        if (nsel > n) {
+            nsel = n;
+        }
+        for (i32 k = 0; k < nsel; k++) {
+            i32 bi = -1;
+            i32 bv = -999999999;
+            for (i32 i = 0; i < n; i++) {
+                if (cval[i] > bv) {
+                    bv = cval[i];
+                    bi = i;
+                }
+            }
+            if (bi >= 0) {
+                top[k] = cand[bi];
+                cval[bi] = -999999999;
+            }
+        }
+        i32 best_enc = -1;
+        i32 best_val = -999999;
+        for (i32 k = 0; k < nsel; k++) {
+            i32 enc = top[k];
+            if (enc >= 0) {
+                i32 x = enc / 13;
+                i32 y = enc - x * 13;
+                for (i32 i = 0; i < 13; i++) {
+                    for (i32 j = 0; j < 13; j++) {
+                        snap[i][j] = this.grid[i][j];
+                    }
+                }
+                this.grid[x][y] = color;
+                for (i32 d = 0; d < 4; d++) {
+                    i32 ax = x;
+                    i32 ay = y;
+                    if (d == 0) { ax = x + 1; }
+                    if (d == 1) { ax = x - 1; }
+                    if (d == 2) { ay = y + 1; }
+                    if (d == 3) { ay = y - 1; }
+                    if (this.is_valid(ax, ay)) {
+                        if (this.grid[ax][ay] == opp) {
+                            if (this.count_liberties(ax, ay) == 0) {
+                                this.remove_group(ax, ay);
+                            }
+                        }
+                    }
+                }
+                this.search_nodes = 0;
+                this.search_budget = budget_per_candidate;
+                this.search_cutoff = 0;
+                i32 val = -999999;
+                if (depth <= 0) {
+                    val = this.evaluate_for(color);
+                } else {
+                    val = this.minimax_sel(depth, opp, color, -INF, INF, child_width);
+                }
+                for (i32 i = 0; i < 13; i++) {
+                    for (i32 j = 0; j < 13; j++) {
+                        this.grid[i][j] = snap[i][j];
+                    }
+                }
+                this.ko_x = save_ko_x;
+                this.ko_y = save_ko_y;
+                this.black_captures = save_bc;
+                this.white_captures = save_wc;
+                this.move_count = save_mc;
+                if (noise > 0) {
+                    val = val + this.rand_below(noise * 2 + 1) - noise;
+                }
+                if (val > best_val) {
+                    best_val = val;
+                    best_enc = enc;
+                }
+            }
+        }
+        // 2026-11-06 Phase 2b: deliberate blunder rate for the lower tiers.
+        // With a 1-capture handicap for Black the levels are otherwise
+        // indistinguishable, so LV6-LV9 give up a small share of their
+        // best moves; LV10 never blunders.
+        if (blunder > 0 && nsel > 1) {
+            if (this.rand_below(100) < blunder) {
+                i32 pick = this.rand_below(nsel);
+                if (top[pick] >= 0) {
+                    best_enc = top[pick];
+                }
+            }
+        }
+        return best_enc;
+    }
+
     // Alpha-beta minimax over the current position. Depth 0 returns the
     // static evaluation. Captures inside the search REALLY remove stones
     // (via remove_group); each node restores the grid from a snapshot
@@ -1149,7 +1618,18 @@ public class Board {
         i32[4] dxs = {0, 0, 1, -1};
         i32[4] dys = {1, -1, 0, 0};
         for (i32 x = 0; x < BOARD_SIZE; x++) {
+            // 2026-11-06: stop immediately once the node budget is spent.
+            // Without this the loop keeps calling minimax for all 169
+            // children; each call bails out at the top but still pays a full
+            // static evaluate_for, turning a "bounded" search into an
+            // O(169^depth) evaluation storm (the 120-230 s moves).
+            if (this.search_nodes > this.search_budget) {
+                break;
+            }
             for (i32 y = 0; y < BOARD_SIZE; y++) {
+                if (this.search_nodes > this.search_budget) {
+                    break;
+                }
                 if (this.grid[x][y] == 0) {
                     this.grid[x][y] = color_to_move;
                     for (i32 d = 0; d < 4; d++) {
