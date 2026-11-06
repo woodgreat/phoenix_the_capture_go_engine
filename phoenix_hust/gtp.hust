@@ -8,45 +8,42 @@
 
 use coordinate;
 
-// Column letter to internal x. A..M -> 0..12 (case-insensitive:
-// a..m accepted), otherwise -1.
-// Delegates to coordinate.hust
-public i32 gtp_col_to_x(char c) {
-    return gtp_to_wood_x(c);
+// 2026-11-06: Wood coordinates are <row letter A-M><column number 1-13>,
+// rows top->bottom, columns left->right.
+// gtp_coord_to_y parses the row letter; gtp_coord_to_x parses the number.
+
+// Wood row (0-12) -> GTP row letter (A-M).
+public char y_to_gtp_row(i32 y) {
+    return wood_y_to_gtp_letter(y);
 }
 
-// Internal x to column letter. 0..12 -> A..M.
-// Invalid x returns '?'.
-// Delegates to coordinate.hust
-public char x_to_gtp_col(i32 x) {
-    if (x < 0 || x > 12) {
-        return '?';
-    }
-    return wood_x_to_gtp(x);
+// GTP row letter -> Wood row (0-12); -1 if invalid.
+public i32 gtp_row_to_y(char c) {
+    return gtp_letter_to_wood_y(c);
 }
 
-// Parse the column letter of a GTP coordinate string ("D4" -> 3).
-// Returns -1 if the string is empty or the first char is not a column.
-public i32 gtp_coord_to_x(String coord) {
+// Parse the row letter of a coordinate ("G7" -> 6). -1 if invalid.
+public i32 gtp_coord_to_y(String coord) {
     if (coord.len() == 0) {
         return -1;
     }
     char c = coord.chars().nth(0).unwrap();
-    return gtp_col_to_x(c);
+    return gtp_row_to_y(c);
 }
 
-// Parse the row number of a GTP coordinate string ("D4" -> 3).
-// Scans all digits in the string ("A13" -> 12). Returns -1 for
-// missing/out-of-range row numbers (covers "pass" and "resign").
-public i32 gtp_coord_to_y(String coord) {
+// Parse the column number of a coordinate ("G7" -> 6, "M13" -> 12).
+// Returns -1 for missing/out-of-range numbers (covers "pass"/"resign").
+public i32 gtp_coord_to_x(String coord) {
     i32 num = 0;
     bool has_digit = false;
-    for (i32 i = 0; i < coord.len(); i++) {
+    for (i32 i = 1; i < coord.len(); i++) {
         char c = coord.chars().nth((usize)i).unwrap();
         if (c >= '0' && c <= '9') {
             has_digit = true;
             i32 d = (i32)c - (i32)'0';
             num = num * 10 + d;
+        } else {
+            return -1;
         }
     }
     if (!has_digit || num < 1 || num > 13) {
@@ -55,54 +52,43 @@ public i32 gtp_coord_to_y(String coord) {
     return num - 1;
 }
 
-// Internal coords to GTP coordinate string: (6,6) -> "G7".
+// Internal coords to Wood coordinate string: (6,6) -> "G7".
 public String xy_to_gtp(i32 x, i32 y) {
-    char col = x_to_gtp_col(x);
-    i32 row = y + 1;
-    return format!("{}{}", col, row);
+    return wood_to_gtp(x, y);
 }
 
-// Internal coords to SGF coordinate string: (6,6) -> "gd".
-// SGF uses lowercase letters, bottom-left origin, skips 'i'.
+// Internal coords to standard SGF: column letter then row letter.
+// (7,6) = G8 -> "hg"; (6,7) = H7 -> "gh".
 public String xy_to_sgf(i32 x, i32 y) {
-    // Convert to SGF coordinates: bottom-left origin
-    i32 sgf_x = x;
-    i32 sgf_y = 12 - y;  // Flip y: top-left (0) -> bottom-left (12)
-    
-    // Convert to letters, skipping 'i' (SGF standard)
-    char x_char = i32_to_sgf_char(sgf_x);
-    char y_char = i32_to_sgf_char(sgf_y);
-    
+    char x_char = i32_to_sgf_char(x);
+    char y_char = i32_to_sgf_char(y);
     return format!("{}{}", x_char, y_char);
 }
 
 // Convert 0-12 to SGF letter (a-m).
-// 2026-11-03: Delegates to coordinate.hust
 public char i32_to_sgf_char(i32 v) {
     return wood_x_to_sgf(v);
 }
 
-// SGF coordinate string to internal coords: "gd" -> (6,6).
-// 2026-11-03: Delegates to coordinate.hust
+// SGF column letter -> internal x.
 public i32 sgf_to_x(String sgf) {
     if (sgf.len() < 1) {
         return -1;
     }
     char c = sgf.chars().nth(0).unwrap();
-    return sgf_to_wood_x(c);
+    return sgf_char_to_i32(c);
 }
 
+// SGF row letter -> internal y.
 public i32 sgf_to_y(String sgf) {
     if (sgf.len() < 2) {
         return -1;
     }
     char c = sgf.chars().nth(1).unwrap();
-    i32 sgf_y = sgf_to_wood_x(c);
-    return sgf_to_wood_y(sgf_y);
+    return sgf_char_to_i32(c);
 }
 
 // Convert SGF letter (a-m) to 0-12.
-// 2026-11-03: Delegates to coordinate.hust
 public i32 sgf_char_to_i32(char c) {
     return sgf_to_wood_x(c);
 }

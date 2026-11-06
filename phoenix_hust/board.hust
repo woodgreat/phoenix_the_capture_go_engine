@@ -672,20 +672,29 @@ public class Board {
     //   header line with column letters A..M (continuous, no I/O skip),
     //   rows 13 down to 1; B = black, W = white, . = empty
     public void print_board() {
-        print!("   A B C D E F G H I J K L M\n");
-        for (i32 y = 12; y >= 0; y--) {
-            i32 row_num = y + 1;
-            if (row_num < 10) {
-                print!(" ");
+        // 2026-11-06: Wood coordinates are <row letter><column number>.
+        // Rows A..M go top -> bottom; columns 1..13 go left -> right.
+        print!("   ");
+        for (i32 x = 0; x < BOARD_SIZE; x++) {
+            i32 n = x + 1;
+            if (n < 10) {
+                print!(" {} ", n);
+            } else {
+                print!("{} ", n);
             }
-            print!("{} ", row_num);
+        }
+        print!("\n");
+        for (i32 y = 0; y < BOARD_SIZE; y++) {
+            u8 u = (u8)y + (u8)65;
+            char row_char = u as char;
+            print!("{}  ", row_char);
             for (i32 x = 0; x < BOARD_SIZE; x++) {
                 if (this.grid[x][y] == 0) {
-                    print!(". ");
+                    print!(".  ");
                 } else if (this.grid[x][y] == 1) {
-                    print!("B ");
+                    print!("B  ");
                 } else {
-                    print!("W ");
+                    print!("W  ");
                 }
             }
             print!("\n");

@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.2.12.20261106122455");
+        println!("phoenix 0.2.13.20261106151327");
         return;
     }
     if (arg1 == "--help") {
@@ -311,7 +311,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("={}0.2.12.20261106122455", p);
+            println!("={}0.2.13.20261106151327", p);
         } else if (cmd == "known_command") {
             String k = "false";
             if (a1 == "protocol_version" || a1 == "name" || a1 == "version"
@@ -656,22 +656,20 @@ void main() {
         } else if (cmd == "export_wsgf" || cmd == "ew") {
             // Export game in Wood SGF format to file
             // 
-            // Wood SGF is a variant of SGF that preserves Wood internal coordinates
-            // without y-axis flipping. This makes it easier to analyze games using
-            // Wood's native coordinate system (x=0-12, y=0-12, where y=0 is row 1/bottom).
+            // Wood SGF writes coordinates in Wood notation <row><column>:
+            // - Standard SGF (export_sgf): column letter then row letter
+            // - Wood SGF: row letter then column letter
             //
-            // Key differences from standard SGF (export_sgf):
-            // - Standard SGF: y is flipped (sgf_y = 12 - wood_y)
-            // - Wood SGF: y stays the same (woodsgf_y = wood_y)
+            // 2026-11-06: both formats now share the top-left origin (Wood rows
+            // go top->bottom), so the only difference is the field order.
             //
             // Coordinate mapping examples:
-            // - Wood (0, 0) = A1 (bottom-left) -> Wood SGF "aa"
-            // - Wood (12, 12) = M13 (top-right) -> Wood SGF "mm"
-            // - Wood (5, 5) = F6 -> Wood SGF "ff"
+            // - G7 = (6, 6) -> Wood SGF "gg", standard SGF "gg"
+            // - G8 = (7, 6) -> Wood SGF "gh", standard SGF "hg"
+            // - H7 = (6, 7) -> Wood SGF "hg", standard SGF "gh"
             //
-            // Use case: When analyzing games with Wood tools or debugging coordinate
-            // conversion issues, Wood SGF preserves the original Wood coordinates,
-            // eliminating confusion from y-axis flipping.
+            // Use case: analyzing games with Wood tools, where the rules
+            // document uses <row letter><column number>.
             //
             // Usage: export_wsgf [filename]
             //   - export_wsgf mygame -> writes mygame_wood.wsgf

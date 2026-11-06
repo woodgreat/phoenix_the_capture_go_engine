@@ -13,25 +13,28 @@
 
 // ========== Coordinate System Definitions ==========
 
-// Wood internal coordinates (engine native)
-// x: column 0-12 (A-M, no skip)
-// y: row 0-12 (1-13, bottom to top)
-// Board array: board[x][y] or flat board[x*13+y]
+// Wood internal coordinates (engine native) -- 2026-11-06 corrected
+// Wood Capture Go uses traditional Chinese coordinates:
+//   row    = letter A-M, 0..12, TOP -> BOTTOM (A = top row, M = bottom)
+//   column = number 1-13, 0..12, LEFT -> RIGHT (1 = leftmost, 13 = rightmost)
+//   notation = <row letter><column number>, e.g. G7 = row G, column 7
+// The rules document fixes the opening as: G7 black (tengen), G8 white
+// (right of tengen), H7 white (below tengen), H8 black (down-right).
+// Only row-letter-first notation makes "G8 is right of G7" and "H7 is
+// below G7" true, so this is the authoritative convention.
+//
+// Board array: board[x][y] with x = column index, y = row index (top-down)
+//              flat index = x*13 + y
+// Center G7 = (6,6); G8 = (7,6); H7 = (6,7); H8 = (7,7).
 
-// SGF coordinates
+// SGF coordinates (standard)
 // Letters a-m (13x13, no skip for Phoenix)
-// SGF x: a=0, b=1, ..., m=12 (left to right)
-// SGF y: TOP-LEFT origin, a=top row, m=bottom row
-//        2026-11-06 corrected: this comment used to say "a=bottom",
-//        which contradicts sgf_y = 12 - wood_y. Proof: M13 (top-right)
-//        exports as "ma", i.e. the row letter is 'a' -> 'a' is the top.
-// Conversion: sgf_x = wood_x, sgf_y = 12 - wood_y
+// SGF x = column letter (left->right), SGF y = row letter (TOP->BOTTOM)
+// Conversion: sgf_x = wood_x, sgf_y = wood_y  (both top-left origin)
 
-// GTP coordinates (human-readable)
-// Letters A-M (columns), numbers 1-13 (rows)
-// GTP x: A=0, B=1, ..., M=12
-// GTP y: 1=bottom, 13=top
-// Conversion: gtp_x = wood_x, gtp_y = wood_y + 1
+// GTP coordinates (Wood notation)
+// <row letter A-M><column number 1-13>, case-insensitive
+// Conversion: row = wood_y, column = wood_x + 1
 
 // ========== Wood Internal Array Operations ==========
 
@@ -81,18 +84,17 @@ public char wood_x_to_sgf(i32 x) {
     return u as char;
 }
 
-// Convert Wood y (0-12) to SGF y (12-0, flipped)
-// Wood y=0 (row 1, bottom) -> SGF y=12 (bottom in SGF)
-// Wood y=12 (row 13, top) -> SGF y=0 (top in SGF)
+// Convert Wood row (0-12, top-down) to SGF y (0-12, top-down).
+// Both systems have a top-left origin, so this is the identity.
 public i32 wood_y_to_sgf(i32 y) {
     if (y < 0 || y > 12) {
         return 0;  // default for invalid
     }
-    return 12 - y;
+    return y;
 }
 
-// Convert Wood coordinates to SGF string
-// Example: (5, 6) -> "fg" (x=5->f, y=6->sgf_y=6->g)
+// Convert Wood coordinates to standard SGF string (column first, row second)
+// Example: G7 = (6, 6) -> "gg"; G8 = (7, 6) -> "hg" (column H, row G)
 public String wood_to_sgf(i32 x, i32 y) {
     char x_char = wood_x_to_sgf(x);
     i32 sgf_y = wood_y_to_sgf(y);
@@ -102,34 +104,31 @@ public String wood_to_sgf(i32 x, i32 y) {
 
 // ========== Wood SGF Format (Wood Coordinate System) ==========
 // 
-// Wood SGF is a variant of SGF that uses Wood internal coordinates directly,
-// without y-axis flipping. This makes it easier to analyze games using
-// Wood's native coordinate system (x=0-12, y=0-12, where y=0 is row 1/bottom).
+// Wood SGF is a variant of SGF that writes coordinates in Wood notation:
+// <row letter><column letter>. Standard SGF writes <column><row>, so the
+// two differ by a transposition on asymmetric points.
 //
-// Key differences from standard SGF:
-// - Standard SGF: y is flipped (sgf_y = 12 - wood_y)
-// - Wood SGF: y stays the same (woodsgf_y = wood_y)
+// 2026-11-06: after correcting the Wood convention to top-left origin,
+// standard SGF and Wood SGF share the same orientation (no y-flip); the
+// only difference left is the field order (row-first vs column-first).
 //
 // Coordinate mapping:
-// - Wood (0, 0) = A1 (bottom-left) -> Wood SGF "aa"
-// - Wood (12, 12) = M13 (top-right) -> Wood SGF "mm"
-// - Wood (5, 5) = F6 -> Wood SGF "ff"
+// - G7 = (6, 6) -> Wood SGF "gg",  standard SGF "gg"
+// - G8 = (7, 6) -> Wood SGF "gh",  standard SGF "hg"
+// - H7 = (6, 7) -> Wood SGF "hg",  standard SGF "gh"
 //
-// Use case: When analyzing games with Wood tools or debugging coordinate
-// conversion issues, Wood SGF preserves the original Wood coordinates,
-// eliminating confusion from y-axis flipping.
+// Use case: when analyzing games with Wood tools, the row-first notation
+// matches the rules document and avoids transposition mistakes.
 //
 // Created: 2026-11-04
 // Author: 龙小虾 🦞
 
-// Convert Wood coordinates to Wood SGF string (no y-flip)
-// Wood SGF: y stays same (Wood y=0 -> SGF 'a', Wood y=12 -> SGF 'm')
-// This is for Wood SGF export where we want coordinates to match Wood system
-// Example: Wood (5, 6) -> "fg" (x=5->f, y=6->g, no flip)
+// Convert Wood coordinates to Wood SGF: <row letter><column letter>.
+// Example: G7 = (6, 6) -> "gg"; G8 = (7, 6) -> "gh"; H7 = (6, 7) -> "hg".
 public String wood_to_woodsgf(i32 x, i32 y) {
-    char x_char = wood_x_to_sgf(x);
-    char y_char = wood_x_to_sgf(y);  // same letter mapping, NO flip
-    return format!("{}{}", x_char, y_char);
+    char row_char = wood_x_to_sgf(y);
+    char col_char = wood_x_to_sgf(x);
+    return format!("{}{}", row_char, col_char);
 }
 
 // Convert Wood board array to SGF coordinate list
@@ -164,16 +163,16 @@ public i32 sgf_to_wood_x(char c) {
     return v;
 }
 
-// Convert SGF y (0-12) to Wood y (12-0, flipped)
+// Convert SGF y (0-12, top-down) to Wood row (0-12, top-down): identity.
 public i32 sgf_to_wood_y(i32 sgf_y) {
     if (sgf_y < 0 || sgf_y > 12) {
         return -1;  // invalid
     }
-    return 12 - sgf_y;
+    return sgf_y;
 }
 
-// Convert SGF string to Wood coordinates
-// Example: "fg" -> (5, 6)
+// Convert standard SGF string to Wood coordinates (column first)
+// Example: "hg" -> (7, 6) = G8; "gh" -> (6, 7) = H7
 public i32[] sgf_to_wood(String sgf) {
     i32[] result;  // [x, y] or empty if invalid
     if (sgf.len() < 2) {
@@ -195,38 +194,35 @@ public i32[] sgf_to_wood(String sgf) {
 
 // ========== Wood -> GTP Conversion ==========
 
-// Convert Wood x (0-12) to GTP letter (A-M)
-public char wood_x_to_gtp(i32 x) {
-    if (x < 0 || x > 12) {
+// Convert Wood row (0-12, top-down) to GTP row letter (A-M).
+public char wood_y_to_gtp_letter(i32 y) {
+    if (y < 0 || y > 12) {
         return 'A';  // default for invalid
     }
-    u8 u = (u8)x + (u8)65;  // 65 = 'A'
+    u8 u = (u8)y + (u8)65;  // 65 = 'A'
     return u as char;
 }
 
-// Convert Wood y (0-12) to GTP number (1-13)
-// Wood y=0 (row 1, bottom) -> GTP y=1
-// Wood y=12 (row 13, top) -> GTP y=13
-public i32 wood_y_to_gtp(i32 y) {
-    if (y < 0 || y > 12) {
+// Convert Wood column (0-12, left-right) to GTP column number (1-13).
+public i32 wood_x_to_gtp_number(i32 x) {
+    if (x < 0 || x > 12) {
         return 1;  // default for invalid
     }
-    return y + 1;
+    return x + 1;
 }
 
-// Convert Wood coordinates to GTP string
-// Example: (5, 6) -> "F7"
+// Convert Wood coordinates to the Wood/GTP notation <row letter><col number>.
+// Example: G7 = (6, 6) -> "G7"; G8 = (7, 6) -> "G8"; H7 = (6, 7) -> "H7".
 public String wood_to_gtp(i32 x, i32 y) {
-    char x_char = wood_x_to_gtp(x);
-    i32 gtp_y = wood_y_to_gtp(y);
-    return format!("{}{}", x_char, gtp_y);
+    char row_char = wood_y_to_gtp_letter(y);
+    i32 col_num = wood_x_to_gtp_number(x);
+    return format!("{}{}", row_char, col_num);
 }
 
 // ========== GTP -> Wood Conversion ==========
 
-// Convert GTP letter (A-M) to Wood x (0-12)
-public i32 gtp_to_wood_x(char c) {
-    // Handle both uppercase and lowercase
+// Convert GTP row letter (A-M, case-insensitive) to Wood row (0-12).
+public i32 gtp_letter_to_wood_y(char c) {
     i32 v = (i32)c - (i32)65;  // 65 = 'A'
     if (v < 0 || v > 12) {
         v = (i32)c - (i32)97;  // 97 = 'a'
@@ -237,34 +233,34 @@ public i32 gtp_to_wood_x(char c) {
     return v;
 }
 
-// Convert GTP number (1-13) to Wood y (0-12)
-public i32 gtp_to_wood_y(i32 gtp_y) {
-    if (gtp_y < 1 || gtp_y > 13) {
+// Convert GTP column number (1-13) to Wood column (0-12).
+public i32 gtp_number_to_wood_x(i32 n) {
+    if (n < 1 || n > 13) {
         return -1;  // invalid
     }
-    return gtp_y - 1;
+    return n - 1;
 }
 
-// Convert GTP string to Wood coordinates
-// Example: "F7" -> (5, 6)
+// Convert a Wood-notation string to Wood coordinates.
+// Syntax: <row letter><column number>, e.g. "G7" -> (x=6, y=6).
 public i32[] gtp_to_wood(String gtp) {
-    i32[] result;  // [x, y] or empty if invalid
+    i32[] result;
     if (gtp.len() < 2) {
         return result;
     }
-    char x_char = gtp.chars().nth(0).unwrap();
-    
-    // Parse number part (could be 1-2 digits)
+    char row_char = gtp.chars().nth(0).unwrap();
+
+    // Parse the number part (1-2 digits) -> column
     String num_str = "";
     for (i32 i = 1; i < gtp.len(); i++) {
         char c = gtp.chars().nth((usize)i).unwrap();
         num_str = num_str + &c.to_string();
     }
-    i32 gtp_y = str_to_i32(num_str);
-    
-    i32 x = gtp_to_wood_x(x_char);
-    i32 y = gtp_to_wood_y(gtp_y);
-    
+    i32 col_num = str_to_i32(num_str);
+
+    i32 y = gtp_letter_to_wood_y(row_char);
+    i32 x = gtp_number_to_wood_x(col_num);
+
     if (x >= 0 && y >= 0) {
         result.push(x);
         result.push(y);
@@ -275,7 +271,9 @@ public i32[] gtp_to_wood(String gtp) {
 // ========== Batch Conversion: Board Arrays ==========
 
 // Convert Wood board to SGF-style board (for export)
-// SGF board[y][x] where y=0 is top, y=12 is bottom
+// SGF board is row-major: sgf[y*13+x], y=0 is the top row.
+// Wood is column-major: wood[x*13+y], y=0 is also the top row.
+// So the conversion only swaps the axis order -- there is no y-flip.
 public i32[] wood_to_sgf_board(i32[] wood_board) {
     i32[] sgf_board;
     for (i32 i = 0; i < 169; i++) {
@@ -283,8 +281,7 @@ public i32[] wood_to_sgf_board(i32[] wood_board) {
     }
     for (i32 x = 0; x < 13; x++) {
         for (i32 y = 0; y < 13; y++) {
-            i32 sgf_y = 12 - y;
-            sgf_board[sgf_y * 13 + x] = wood_board[x * 13 + y];
+            sgf_board[y * 13 + x] = wood_board[x * 13 + y];
         }
     }
     return sgf_board;
@@ -297,9 +294,8 @@ public i32[] sgf_to_wood_board(i32[] sgf_board) {
         wood_board.push(0);
     }
     for (i32 x = 0; x < 13; x++) {
-        for (i32 sgf_y = 0; sgf_y < 13; sgf_y++) {
-            i32 wood_y = 12 - sgf_y;
-            wood_board[x * 13 + wood_y] = sgf_board[sgf_y * 13 + x];
+        for (i32 y = 0; y < 13; y++) {
+            wood_board[x * 13 + y] = sgf_board[y * 13 + x];
         }
     }
     return wood_board;
@@ -335,11 +331,11 @@ public bool gtp_valid(String gtp) {
 // Returns array of [x1,y1, x2,y2, x3,y3, x4,y4] (may have -1 for invalid)
 public i32[] wood_neighbors(i32 x, i32 y) {
     i32[] result;
-    // Up (y+1)
-    if (y + 1 < 13) { result.push(x); result.push(y + 1); }
-    else { result.push(-1); result.push(-1); }
-    // Down (y-1)
+    // Up (y-1, because y grows downward)
     if (y - 1 >= 0) { result.push(x); result.push(y - 1); }
+    else { result.push(-1); result.push(-1); }
+    // Down (y+1)
+    if (y + 1 < 13) { result.push(x); result.push(y + 1); }
     else { result.push(-1); result.push(-1); }
     // Left (x-1)
     if (x - 1 >= 0) { result.push(x - 1); result.push(y); }
@@ -352,31 +348,45 @@ public i32[] wood_neighbors(i32 x, i32 y) {
 
 // ========== Test Helpers ==========
 
-// Print Wood board for debugging
+// Print Wood board for debugging (row letters A-M top-down, columns 1-13)
 public void wood_print(i32[] board) {
-    println!("   A B C D E F G H I J K L M");
-    for (i32 y = 12; y >= 0; y--) {
-        String row = format!("{:>2} ", y + 1);
+    String header = "   ";
+    for (i32 x = 0; x < 13; x++) {
+        i32 n = x + 1;
+        if (n < 10) { header = format!("{} {} ", header, n); }
+        else { header = format!("{}{} ", header, n); }
+    }
+    println!("{}", header);
+    for (i32 y = 0; y < 13; y++) {
+        char row_char = wood_y_to_gtp_letter(y);
+        String row = format!("{}  ", row_char);
         for (i32 x = 0; x < 13; x++) {
             i32 v = board[x * 13 + y];
-            if (v == 0) { row = row + ". "; }
-            else if (v == 1) { row = row + "B "; }
-            else { row = row + "W "; }
+            if (v == 0) { row = row + ".  "; }
+            else if (v == 1) { row = row + "B  "; }
+            else { row = row + "W  "; }
         }
         println!("{}", row);
     }
 }
 
-// Print SGF board for debugging (SGF orientation: y=0 is top)
+// Print SGF board for debugging (row-major, y=0 is the top row)
 public void sgf_print(i32[] sgf_board) {
-    println!("   A B C D E F G H I J K L M");
-    for (i32 sgf_y = 0; sgf_y < 13; sgf_y++) {
-        String row = format!("{:>2} ", 13 - sgf_y);
+    String header = "   ";
+    for (i32 x = 0; x < 13; x++) {
+        i32 n = x + 1;
+        if (n < 10) { header = format!("{} {} ", header, n); }
+        else { header = format!("{}{} ", header, n); }
+    }
+    println!("{}", header);
+    for (i32 y = 0; y < 13; y++) {
+        char row_char = wood_y_to_gtp_letter(y);
+        String row = format!("{}  ", row_char);
         for (i32 x = 0; x < 13; x++) {
-            i32 v = sgf_board[sgf_y * 13 + x];
-            if (v == 0) { row = row + ". "; }
-            else if (v == 1) { row = row + "B "; }
-            else { row = row + "W "; }
+            i32 v = sgf_board[y * 13 + x];
+            if (v == 0) { row = row + ".  "; }
+            else if (v == 1) { row = row + "B  "; }
+            else { row = row + "W  "; }
         }
         println!("{}", row);
     }
