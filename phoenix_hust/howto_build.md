@@ -12,7 +12,9 @@ phoenix_hust/
 ├── configs/                          # ← 编译配置目录 Build configs
 │   ├── config-linux.toml             # Linux 编译配置 Linux build config
 │   └── config-windows.toml           # Windows 编译配置 Windows build config
-├── build.sh                          # 编译脚本 Build script
+├── build.sh                          # 编译入口（转发）Build entry (dispatcher)
+├── build_linux_var.sh                # Linux 单平台编译 Linux build
+├── build_windows_var.sh              # Windows 单平台编译 Windows build
 └── dist/                             # 编译输出目录 Build output (not in git)
     ├── linux/
     ├── windows/
@@ -90,14 +92,14 @@ rustup update
 ```bash
 cd /home/aaa/workspace/phoenix_the_capture_go_engine/phoenix_the_capture_go_engine/phoenix_hust
 
-# 编译 Linux 版本 Build Linux version
-./build.sh linux
+# 方式 A：单平台脚本（2026-11-06 起）
+./build_linux_var.sh      # 只编 Linux Only Linux
+./build_windows_var.sh    # 只编 Windows Only Windows
 
-# 编译 Windows 版本 Build Windows version
-./build.sh windows
-
-# 编译所有平台 Build all platforms
-./build.sh all
+# 方式 B：入口脚本（等价于转发到上面两个脚本）
+./build.sh linux          # -> build_linux_var.sh
+./build.sh windows        # -> build_windows_var.sh
+./build.sh all            # 两个都跑 Both
 ```
 
 **脚本自动完成：What the script does automatically:**
@@ -297,7 +299,7 @@ debug = false          # 是否包含调试信息 Include debug info
    rustup target add x86_64-apple-darwin
    ```
 
-4. 更新 `build.sh` 脚本 Update `build.sh` script
+4. 更新 `build_linux_var.sh` / `build_windows_var.sh` 脚本 Update the platform scripts
 
 ---
 
@@ -458,14 +460,9 @@ x86_64-w64-mingw32-gcc --version  # 应输出版本 Should output version
 
 **4. 编译 Build**
 ```bash
-# 编译 Linux 版本
-./build.sh linux
-
-# 编译 Windows 版本
-./build.sh windows
-
-# 或编译所有平台
-./build.sh all
+./build_linux_var.sh      # 只编 Linux
+./build_windows_var.sh    # 只编 Windows
+./build.sh all            # 两个都编（内部依次调用上面两个）
 ```
 
 **5. 验证产物 Verify Output**
@@ -516,12 +513,13 @@ file dist/windows/phoenix.exe
 | 项目 Item | 位置 Location |
 |-----------|--------------|
 | **编译配置 Build configs** | `configs/config-linux.toml` / `configs/config-windows.toml` |
-| **编译脚本 Build script** | `build.sh` |
+| **编译入口 Build entry** | `build.sh`（转发到两个单平台脚本）|
+| **单平台脚本 Platform scripts** | `build_linux_var.sh` / `build_windows_var.sh` |
 | **编译产物 Build output** | `dist/linux/` / `dist/windows/` |
 | **临时文件 Temp files** | `dist/temp/` |
 
-**推荐使用 `./build.sh [linux|windows|all]` 一键编译！**
-**Recommended: Use `./build.sh [linux|windows|all]` for one-click build!**
+**单平台用 `./build_linux_var.sh` / `./build_windows_var.sh`；一次编两平台用 `./build.sh all`。**
+**Use the per-platform scripts directly, or `./build.sh all` for both.**
 
 ---
 
