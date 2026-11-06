@@ -8,32 +8,32 @@
 
 use coordinate;
 
-// 2026-11-06: Wood coordinates are <row letter A-M><column number 1-13>,
-// rows top->bottom, columns left->right.
-// gtp_coord_to_y parses the row letter; gtp_coord_to_x parses the number.
+// 2026-11-06: Wood coordinates are <column letter A-M><row number 1-13>.
+// Columns run left->right, rows are numbered top->bottom (no flip).
+// gtp_coord_to_x parses the letter; gtp_coord_to_y parses the number.
 
-// Wood row (0-12) -> GTP row letter (A-M).
-public char y_to_gtp_row(i32 y) {
-    return wood_y_to_gtp_letter(y);
+// Wood column (0-12) -> GTP column letter (A-M).
+public char x_to_gtp_col(i32 x) {
+    return wood_x_to_gtp_letter(x);
 }
 
-// GTP row letter -> Wood row (0-12); -1 if invalid.
-public i32 gtp_row_to_y(char c) {
-    return gtp_letter_to_wood_y(c);
+// GTP column letter -> Wood column (0-12); -1 if invalid.
+public i32 gtp_col_to_x(char c) {
+    return gtp_letter_to_wood_x(c);
 }
 
-// Parse the row letter of a coordinate ("G7" -> 6). -1 if invalid.
-public i32 gtp_coord_to_y(String coord) {
+// Parse the column letter of a coordinate ("G7" -> 6). -1 if invalid.
+public i32 gtp_coord_to_x(String coord) {
     if (coord.len() == 0) {
         return -1;
     }
     char c = coord.chars().nth(0).unwrap();
-    return gtp_row_to_y(c);
+    return gtp_col_to_x(c);
 }
 
-// Parse the column number of a coordinate ("G7" -> 6, "M13" -> 12).
+// Parse the row number of a coordinate ("G7" -> 6, "M13" -> 12).
 // Returns -1 for missing/out-of-range numbers (covers "pass"/"resign").
-public i32 gtp_coord_to_x(String coord) {
+public i32 gtp_coord_to_y(String coord) {
     i32 num = 0;
     bool has_digit = false;
     for (i32 i = 1; i < coord.len(); i++) {
@@ -52,7 +52,7 @@ public i32 gtp_coord_to_x(String coord) {
     return num - 1;
 }
 
-// Internal coords to Wood coordinate string: (6,6) -> "G7".
+// Internal coords to GTP: (6,6) -> "G7".
 public String xy_to_gtp(i32 x, i32 y) {
     return wood_to_gtp(x, y);
 }

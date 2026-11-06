@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.2.13.20261106151327");
+        println!("phoenix 0.2.14.20261106152908");
         return;
     }
     if (arg1 == "--help") {
@@ -311,7 +311,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("={}0.2.13.20261106151327", p);
+            println!("={}0.2.14.20261106152908", p);
         } else if (cmd == "known_command") {
             String k = "false";
             if (a1 == "protocol_version" || a1 == "name" || a1 == "version"
@@ -656,20 +656,19 @@ void main() {
         } else if (cmd == "export_wsgf" || cmd == "ew") {
             // Export game in Wood SGF format to file
             // 
-            // Wood SGF writes coordinates in Wood notation <row><column>:
-            // - Standard SGF (export_sgf): column letter then row letter
-            // - Wood SGF: row letter then column letter
-            //
-            // 2026-11-06: both formats now share the top-left origin (Wood rows
-            // go top->bottom), so the only difference is the field order.
+            // Wood SGF is the Wood-flavoured export. Wood coordinates are
+            // <column letter><row number> with a top-left origin; standard
+            // SGF is <column letter><row letter> with the same origin.
+            // After the 2026-11-06 orientation fix (rows counted from the
+            // top, no flip) both formats emit identical coordinate strings.
             //
             // Coordinate mapping examples:
-            // - G7 = (6, 6) -> Wood SGF "gg", standard SGF "gg"
-            // - G8 = (7, 6) -> Wood SGF "gh", standard SGF "hg"
-            // - H7 = (6, 7) -> Wood SGF "hg", standard SGF "gh"
+            // - G7 = (6, 6) -> both "gg"
+            // - G8 = (6, 7) -> both "gh"
+            // - H7 = (7, 6) -> both "hg"
             //
-            // Use case: analyzing games with Wood tools, where the rules
-            // document uses <row letter><column number>.
+            // The command is kept for backward compatibility and to mark a
+            // game as Wood-rules.
             //
             // Usage: export_wsgf [filename]
             //   - export_wsgf mygame -> writes mygame_wood.wsgf
