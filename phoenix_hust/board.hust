@@ -735,6 +735,43 @@ public class Board {
         this.game_over_move = mv;
     }
 
+    // 2026-11-06: Recompute the terminal state from the current board.
+    // Every successful move (human `play` or AI `genmove`) must call this
+    // so `result` never lags behind the capture counters.
+    //   0 = ongoing, 1 = black wins, 2 = white wins
+    // (state 3 = draw is set only by genmove's cannot_move path)
+    public void refresh_game_over_state(i32 move_no) {
+        if (this.black_captures >= BLACK_TARGET) {
+            this.game_over_state = 1;
+            this.game_over_move = move_no;
+            return;
+        }
+        if (this.white_captures >= WHITE_TARGET) {
+            this.game_over_state = 2;
+            this.game_over_move = move_no;
+            return;
+        }
+        i32 empties = 0;
+        for (i32 x = 0; x < BOARD_SIZE; x++) {
+            for (i32 y = 0; y < BOARD_SIZE; y++) {
+                if (this.grid[x][y] == 0) {
+                    empties = empties + 1;
+                }
+            }
+        }
+        if (empties == 0) {
+            if (this.black_captures > this.white_captures) {
+                this.game_over_state = 1;
+            } else {
+                this.game_over_state = 2;
+            }
+            this.game_over_move = move_no;
+            return;
+        }
+        this.game_over_state = 0;
+        this.game_over_move = 0;
+    }
+
     // Reset the search node counter and set the budget (called by the
     // AI layer before starting a new search)
     public void start_search(i32 budget) {

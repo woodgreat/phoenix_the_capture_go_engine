@@ -1,7 +1,7 @@
 // Phoenix - Wood Capture Go Engine
 // Step 7: GTP main loop
 // Step 8: complete command set (undo, known_command, list_commands,
-//         final_score, fixed_handicap, wood_* extensions, ID echo)
+//         fixed_handicap, wood_* extensions, ID echo)
 //
 // GTP v2 protocol over stdin/stdout:
 //   request : [id] command args...
@@ -27,9 +27,9 @@ use RUST.time.SystemTime;
 
 // Internal game state (engine internal use only)
 // 0 = gaming, 1 = black wins, 2 = white wins
-// Updated after every genmove, read by result/board_status
+// Updated after every successful move (play or genmove), read by result
 // 2026-11-03: Moved to Board class (game_over_state field)
-// Board.clear() resets it to 0; genmove updates it via set_game_over_state()
+// Board.clear() resets it to 0; moves call refresh_game_over_state()
 
 // 2026-10-31: Convert Unix time value to formatted timestamp string
 // Format: YYYYMMDD_HHMM (UTC)
@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.2.14.20261106152908");
+        println!("phoenix 0.2.15.20261106164028");
         return;
     }
     if (arg1 == "--help") {
@@ -240,8 +240,6 @@ void main() {
         } else if (cmd == "sc") {
             cmd = "show";
             a1 = "captures";
-        } else if (cmd == "bs") {
-            cmd = "board_status";
         } else if (cmd == "r") {
             cmd = "result";
         } else if (cmd == "es") {
@@ -311,7 +309,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("={}0.2.14.20261106152908", p);
+            println!("={}0.2.15.20261106164028", p);
         } else if (cmd == "known_command") {
             String k = "false";
             if (a1 == "protocol_version" || a1 == "name" || a1 == "version"
@@ -325,13 +323,13 @@ void main() {
                 || a1 == "captures" || a1 == "c" || a1 == "sc"
                 || a1 == "print_target" || a1 == "pt"
                 || a1 == "set_target" || a1 == "st"
-                || a1 == "board_status" || a1 == "bs"
                 || a1 == "print_wood_rules" || a1 == "wr"
                 || a1 == "wood_ai_level" || a1 == "print_ai_level" || a1 == "pal"
                 || a1 == "set_ai_level_all" || a1 == "sala"
                 || a1 == "set_ai_level_black" || a1 == "salb"
                 || a1 == "set_ai_level_white" || a1 == "salw"
                 || a1 == "result" || a1 == "r"
+                || a1 == "final_score"
                 || a1 == "ucb" || a1 == "use_clean_board"
                 || a1 == "usb" || a1 == "use_set_board"
                 || a1 == "pm" || a1 == "print_moves" || a1 == "move_history"
@@ -364,7 +362,7 @@ void main() {
             println!("");
             println!("Game info:");
             println!("  rw / result             - show game result (简写)");
-            println!("  board_status            - show board status");
+            println!("  final_score             - GTP score (B+N / W+N)");
             println!("  wood_ai_level           - show/set AI level");
             println!("  wood_captures           - show capture counts");
             println!("  wood_rules              - show rules version");
@@ -408,10 +406,10 @@ void main() {
             println!("wood_ai_level");
             println!("wood_captures");
             println!("wood_target");
-            println!("board_status");
             println!("wood_rules");
             println!("result");
             println!("rw");
+            println!("final_score");
             println!("undo");
             println!("fixed_handicap");
             println!("print_moves");
@@ -527,6 +525,9 @@ void main() {
                         move_history.push(y);
                         move_history.push(r);
                         move_count = move_count + 1;
+                        // 2026-11-06: human moves must update the terminal
+                        // state too, not just genmove.
+                        b.refresh_game_over_state(move_count);
                         debug_log_i32_3(1, "PLAY", "ok", 1, "captured", r, "new_move_count", b.move_count);
                         println!("={}", p);
                         board_changed = true;
@@ -549,7 +550,10 @@ void main() {
                 }
             }
         } else if (cmd == "undo") {
-            if (hist_meta.len() >= 5) {
+            // 2026-11-06: once the game is over, undo is rejected.
+            if (b.get_game_over_state() != 0) {
+                println!("?{}cannot undo (game over)", p);
+            } else if (hist_meta.len() >= 5) {
                 i32 mbase = (i32)hist_meta.len() - 5;
                 i32 m_bc = hist_meta[mbase];
                 i32 m_wc = hist_meta[mbase + 1];
@@ -623,6 +627,11 @@ void main() {
             } else {
                 println!("={}gaming", p);
             }
+        } else if (cmd == "final_score") {
+            // GTP standard, machine-readable: capture difference (B+N / W+N).
+            // 2026-11-06: restored; the helper had been left unused since
+            // the command was dropped in c9721f8.
+            println!("={}{}", p, format_final_score(b.black_captures, b.white_captures));
         } else if (cmd == "print_wood_rules" || cmd == "wood_rules") {
             println!("={}Wood Capture Go Rules v1.0 (2026-09-13)", p);
         } else if (cmd == "move_history") {
@@ -902,32 +911,8 @@ void main() {
                     move_count = move_count + 1;
                     String coord = xy_to_gtp(lx, ly);
                     
-                    // Update internal game over state (inline check)
-                    i32 empties = 0;
-                    for (i32 ex = 0; ex < 13; ex++) {
-                        for (i32 ey = 0; ey < 13; ey++) {
-                            if (b.get(ex, ey) == 0) {
-                                empties = empties + 1;
-                            }
-                        }
-                    }
-                    if (b.black_captures >= 6) {
-                        b.set_game_over_state(1);
-                        b.set_game_over_move(move_count);
-                    } else if (b.white_captures >= 5) {
-                        b.set_game_over_state(2);
-                        b.set_game_over_move(move_count);
-                    } else if (empties == 0) {
-                        if (b.black_captures > b.white_captures) {
-                            b.set_game_over_state(1);
-                            b.set_game_over_move(move_count);
-                        } else {
-                            b.set_game_over_state(2);
-                            b.set_game_over_move(move_count);
-                        }
-                    } else {
-                        b.set_game_over_state(0);
-                    }
+                    // 2026-11-06: shared with the human play path
+                    b.refresh_game_over_state(move_count);
                     
                     println!("={}{} black={} white={}", p, coord.clone(), b.black_captures, b.white_captures);
                     board_changed = true;
