@@ -76,8 +76,13 @@ case "$PLATFORM" in
         if [ -f "$LINUX_BIN" ]; then
             cp "$LINUX_BIN" "$DIST_DIR/linux/phoenix"
             chmod +x "$DIST_DIR/linux/phoenix"
-            # 同步刷新项目根目录 ./phoenix 软链接 (历史用法, 仍保留)
-            ln -sf "$(pwd)/$DIST_DIR/linux/phoenix" ./phoenix
+            # 2026-11-06 修复: 这里以前建的是指向 dist/linux/phoenix 的软链接,
+            # 但 `hust build .` 会把自己的产物写到 ./phoenix, 顺着软链接把
+            # dist/linux/phoenix 覆盖成旧二进制。`build.sh all` 时表现为
+            # 编完 windows 后 Linux 发布件变回旧版本。改为普通文件副本。
+            rm -f ./phoenix
+            cp "$DIST_DIR/linux/phoenix" ./phoenix
+            chmod +x ./phoenix
             echo "✅ Linux 版本已放置到 $DIST_DIR/linux/phoenix"
         else
             echo "❌ 找不到 Linux 编译产物: $LINUX_BIN"
@@ -119,6 +124,13 @@ case "$PLATFORM" in
         if [ -f "$WINDOWS_BIN" ]; then
             cp "$WINDOWS_BIN" "$DIST_DIR/windows/phoenix.exe"
             echo "✅ Windows 版本已放置到 $DIST_DIR/windows/phoenix.exe"
+            # `hust build .` 会把宿主产物写到 ./phoenix; 恢复了普通文件之后
+            # 这里再同步一次 Linux 发布件, 保证 all 构建后两份产物都对。
+            if [ -f "$DIST_DIR/linux/phoenix" ]; then
+                rm -f ./phoenix
+                cp "$DIST_DIR/linux/phoenix" ./phoenix
+                chmod +x ./phoenix
+            fi
         else
             echo "❌ 找不到 Windows 编译产物: $WINDOWS_BIN"
             exit 1
