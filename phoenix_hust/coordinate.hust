@@ -20,8 +20,11 @@
 
 // SGF coordinates
 // Letters a-m (13x13, no skip for Phoenix)
-// SGF x: a=0, b=1, ..., m=12
-// SGF y: bottom-left origin (a=bottom, m=top)
+// SGF x: a=0, b=1, ..., m=12 (left to right)
+// SGF y: TOP-LEFT origin, a=top row, m=bottom row
+//        2026-11-06 corrected: this comment used to say "a=bottom",
+//        which contradicts sgf_y = 12 - wood_y. Proof: M13 (top-right)
+//        exports as "ma", i.e. the row letter is 'a' -> 'a' is the top.
 // Conversion: sgf_x = wood_x, sgf_y = 12 - wood_y
 
 // GTP coordinates (human-readable)
