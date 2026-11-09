@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.2.15.20261106164028");
+        println!("phoenix 0.2.16.20261109163741");
         return;
     }
     if (arg1 == "--help") {
@@ -256,12 +256,6 @@ void main() {
             cmd = "set_target";
         } else if (cmd == "h" || cmd == "help" || cmd == "ls") {
             cmd = "list_commands";
-        } else if (cmd == "h" || cmd == "help" || cmd == "ls") {
-            cmd = "list_commands";
-        } else if (cmd == "h" || cmd == "help" || cmd == "ls") {
-            cmd = "list_commands";
-        } else if (cmd == "es") {
-            cmd = "export_sgf";
         } else if (cmd == "pm") {
             cmd = "print_moves";
         } else if (cmd == "move_history") {
@@ -309,7 +303,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("={}0.2.15.20261106164028", p);
+            println!("={}0.2.16.20261109163741", p);
         } else if (cmd == "known_command") {
             String k = "false";
             if (a1 == "protocol_version" || a1 == "name" || a1 == "version"
@@ -324,6 +318,7 @@ void main() {
                 || a1 == "print_target" || a1 == "pt"
                 || a1 == "set_target" || a1 == "st"
                 || a1 == "print_wood_rules" || a1 == "wr"
+                || a1 == "set"
                 || a1 == "wood_ai_level" || a1 == "print_ai_level" || a1 == "pal"
                 || a1 == "set_ai_level_all" || a1 == "sala"
                 || a1 == "set_ai_level_black" || a1 == "salb"
@@ -338,42 +333,6 @@ void main() {
                 k = "true";
             }
             println!("={}{}", p, k);
-        } else if (cmd == "help") {
-            // Print available commands
-            println!("={}Available commands:", p);
-            println!("");
-            println!("Board setup:");
-            println!("  ucb / use_clean_board  - use empty board");
-            println!("  usb / use_set_board    - use twist-cross opening");
-            println!("  clear_board / cb       - clear board");
-            println!("");
-            println!("Moves:");
-            println!("  play <color> <coord>    - play a stone (e.g. play black F7)");
-            println!("  pb / pw <coord>         - play black/white (简写)");
-            println!("  genmove <color>         - AI move (e.g. genmove black)");
-            println!("  gb / gw                 - AI move black/white (简写)");
-            println!("  undo                    - undo last move");
-            println!("");
-            println!("Display:");
-            println!("  sb / showboard          - show board (简写)");
-            println!("  sc / show captures      - show capture counts (简写)");
-            println!("  pm / print_moves        - print move history (简写)");
-            println!("  move_history            - alias for print_moves");
-            println!("");
-            println!("Game info:");
-            println!("  rw / result             - show game result (简写)");
-            println!("  final_score             - GTP score (B+N / W+N)");
-            println!("  wood_ai_level           - show/set AI level");
-            println!("  wood_captures           - show capture counts");
-            println!("  wood_rules              - show rules version");
-            println!("");
-            println!("Other:");
-            println!("  list_commands           - list all GTP commands");
-            println!("  known_command <cmd>     - check if command exists");
-            println!("  export_sgf              - export game as SGF");
-            println!("  export_wsgf             - export game as Wood SGF (Wood coordinates)");
-            println!("  quit / exit             - exit program");
-            println!("  help                    - show this help");
         } else if (cmd == "list_commands") {
             println!("={}protocol_version", p);
             println!("name");
@@ -396,19 +355,16 @@ void main() {
             println!("genmove");
             println!("gb");
             println!("gw");
-            println!("showboard");
+            println!("show_board");
             println!("sb");
             println!("show");
-            println!("show captures");
             println!("sc");
-            println!("set ai");
-            println!("set ai level");
+            println!("set");
             println!("wood_ai_level");
             println!("wood_captures");
             println!("wood_target");
             println!("wood_rules");
             println!("result");
-            println!("rw");
             println!("final_score");
             println!("undo");
             println!("fixed_handicap");
