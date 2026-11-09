@@ -157,173 +157,25 @@ public class Level1 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L1", "genmove color", color);   // rebind: params immutable, locals are mut
-        i32 opp = b2.opponent(color);
-        i32[169] capture_moves = {0};
-        i32 n_cap = 0;
-        i32[169] defend_moves = {0};
-        i32 n_def = 0;
-        i32[169] empty_moves = {0};
-        i32 n_empty = 0;
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        // Save full board state for restoration after virtual placement
-        i32[13][13] saved_grid = {0};
-        for (i32 i = 0; i < 13; i++) {
-            for (i32 j = 0; j < 13; j++) {
-                saved_grid[i][j] = b2.get(i, j);
-            }
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 24, 2, 18, 10, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
         }
-        // Step 1: detect own groups in atari (1 liberty)
-        bool has_atari = false;
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
-                if (b2.get(x, y) == color) {
-                    if (b2.count_liberties(x, y) == 1) {
-                        has_atari = true;
-                        debug_log_i32(1, "L1", "atari group at", x * 13 + y);
-                    }
-                }
-            }
-        }
-        debug_log_i32(1, "L1", "has_atari", has_atari as i32);
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
-                if (b2.get(x, y) == 0) {
-                    bool is_ko = b2.is_ko_point(x, y);
-                    // try the placement virtually
-                    b2.set(x, y, color);
-                    bool captures = false;
-                    bool defends = false;
-                    for (i32 d = 0; d < 4; d++) {
-                        i32 nx = x + dxs[d];
-                        i32 ny = y + dys[d];
-                        if (b2.is_valid(nx, ny)) {
-                            if (b2.get(nx, ny) == opp) {
-                                if (b2.count_liberties(nx, ny) == 0) {
-                                    captures = true;
-                                }
-                            }
-                        }
-                    }
-                    bool alive = b2.count_liberties(x, y) > 0;
-                    // Check if this move defends an atari group
-                    if (has_atari && alive) {
-                        // Check if any neighboring own group WAS in atari (1 liberty) before this move
-                        // and now has more liberties (because we placed a stone adjacent to it)
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) == color) {
-                                    // This move connects to an own group
-                                    // Check if it increases liberties from atari
-                                    // First check: was this group in atari before our move?
-                                    // We know has_atari is true, so some group is in atari
-                                    // Check if this specific group now has > 1 liberty
-                                    // and would have had 1 liberty without our move
-                                    if (b2.count_liberties(nx, ny) > 1) {
-                                        // Temporarily remove our stone to check original liberty count
-                                        b2.set(x, y, 0);
-                                        i32 orig_libs = b2.count_liberties(nx, ny);
-                                        b2.set(x, y, color);
-                                        if (orig_libs == 1) {
-                                            defends = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Restore full board state (including captured stones)
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
-                            b2.set(i, j, saved_grid[i][j]);
-                        }
-                    }
-                    if (captures || alive) {
-                        i32 enc = x * 13 + y;
-                        // Level 1: beginners prefer playing near existing stones
-                        bool near_stone = false;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx2 = x + dxs[d];
-                            i32 ny2 = y + dys[d];
-                            if (b2.is_valid(nx2, ny2)) {
-                                if (b2.get(nx2, ny2) != 0) {
-                                    near_stone = true;
-                                }
-                            }
-                        }
-                        if (near_stone) {
-                            empty_moves[n_empty] = enc;
-                            n_empty = n_empty + 1;
-                        }
-                        if (captures) {
-                            if (!is_ko) {
-                                capture_moves[n_cap] = enc;
-                                n_cap = n_cap + 1;
-                            }
-                        }
-                        if (defends) {
-                            defend_moves[n_def] = enc;
-                            n_def = n_def + 1;
-                        }
-                    }
-                }
-            }
-        }
-        debug_log_i32(1, "L1", "n_cap", n_cap);
-        debug_log_i32(1, "L1", "n_def", n_def);
-        debug_log_i32(1, "L1", "n_empty", n_empty);
-        i32 mv = -1;
-        if (n_cap > 0) {
-            mv = capture_moves[b2.rand_below(n_cap)];
-        } else if (n_def > 0) {
-            // Priority 2: defend atari groups
-            mv = defend_moves[b2.rand_below(n_def)];
-            debug_log_i32(1, "L1", "defending", mv);
-        } else if (n_empty > 0) {
-            mv = empty_moves[b2.rand_below(n_empty)];
-        } else {
-            // Wood rules forbid passing: fill any empty point (random)
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            if (n_all > 0) {
-                // Try empty points one by one until a legal one is found.
-                for (i32 idx = 0; idx < n_all && mv < 0; idx++) {
-                    i32 candidate = all_empty[idx];
-                    i32 cx = candidate / 13;
-                    i32 cy = candidate - cx * 13;
-                    if (b2.is_legal_placement(cx, cy, color)) {
-                        mv = candidate;
-                    }
-                }
-                debug_log_i32(1, "L1", "filling legal", mv);
-            }
-        }
-        if (mv < 0) {
-            // no legal point at all (not a pass): Wood rules forbid passing,
-            // this state is theoretically unreachable on a 13x13 board
+        if (enc < 0) {
             this.last_x = -1;
             this.last_y = -1;
             return b2;
         }
-        i32 mx = mv / 13;
-        i32 my = mv - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;
             this.last_y = my;
         } else {
-            // defensive: candidates are pre-checked, should not happen
             this.last_x = -1;
             this.last_y = -1;
         }
@@ -468,170 +320,20 @@ public class Level2 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L2", "genmove color", color);
-        i32 opp = b2.opponent(color);
-        i32 best_enc = -1;
-        // 2026-11-05: was -1, which is a valid minimax score from White's
-        // perspective. Every negative candidate failed `val > -1`, leaving
-        // best_enc unset and falling back to the first empty point (A1).
-        i32 best_captures = -999999;
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        i32[13][13] saved_grid = {0};
-        for (i32 i = 0; i < 13; i++) {
-            for (i32 j = 0; j < 13; j++) {
-                saved_grid[i][j] = b2.get(i, j);
-            }
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 32, 2, 20, 20, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
         }
-        
-        // 2026-11-05 概率控制：使用封装的战术方法
-        bool allow_sacrifice = should_sacrifice(b2.rand_below(100), 2, 200000, false);
-        bool prioritize_rescue = should_rescue(b2.rand_below(100), 2, 200000);
-        bool analyze_ko = analyze_ko_threat(b2.rand_below(100), 2, 200000);
-        
-        // 如果本回合不允许弃子，优先救援模式
-        if (!allow_sacrifice && prioritize_rescue) {
-            debug_log_i32(1, "L2", "rescue_priority_mode", 1);
+        if (enc < 0) {
+            this.last_x = -1;
+            this.last_y = -1;
+            return b2;
         }
-        
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
-                if (b2.get(x, y) == 0) {
-                    bool is_ko = b2.is_ko_point(x, y);
-                    b2.set(x, y, color);
-                    i32 cap = 0;
-                    for (i32 d = 0; d < 4; d++) {
-                        i32 nx = x + dxs[d];
-                        i32 ny = y + dys[d];
-                        if (b2.is_valid(nx, ny)) {
-                            if (b2.get(nx, ny) == opp) {
-                                if (b2.count_liberties(nx, ny) == 0) {
-                                    cap = cap + b2.remove_group(nx, ny);
-                                }
-                            }
-                        }
-                    }
-                    bool alive = b2.count_liberties(x, y) > 0;
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
-                            b2.set(i, j, saved_grid[i][j]);
-                        }
-                    }
-                    // 2026-11-05 概率控制：不允许弃子时，跳过危险的 minimax 评估
-                        if (!allow_sacrifice && !alive && cap == 0) {
-                            continue;  // only a real suicide (no capture) is skipped
-                        }
-                    if (alive && !(is_ko && cap == 1)) {
-                        // Level 2 (对标 Level 6): depth-1 minimax evaluation
-                        b2.set(x, y, color);
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) == opp) {
-                                    if (b2.count_liberties(nx, ny) == 0) {
-                                        b2.remove_group(nx, ny);
-                                    }
-                                }
-                            }
-                        }
-                        i32 val = b2.minimax(1, opp, color, -999999, 999999);
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                b2.set(i, j, saved_grid[i][j]);
-                            }
-                        }
-                        // 2026-11-05: positional tie-breaker. Without it every
-                        // "quiet" point scores the same and the deterministic
-                        // scan always picks the first one (A1 -> edge filling).
-                        i32 pos_bonus = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny) && b2.get(nx, ny) != 0) {
-                                pos_bonus = pos_bonus + 4;
-                            }
-                        }
-                        i32 ddx = x - 6;
-                        if (ddx < 0) { ddx = -ddx; }
-                        i32 ddy = y - 6;
-                        if (ddy < 0) { ddy = -ddy; }
-                        pos_bonus = pos_bonus + (12 - ddx - ddy) * 2;
-                        val = val + pos_bonus;
-                        if (val > best_captures) {
-                            best_captures = val;
-                            best_enc = x * 13 + y;
-                        } else if (val == best_captures && val > -999999) {
-                            if (b2.rand_below(2) == 0) {
-                                best_enc = x * 13 + y;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if (best_enc < 0) {
-            // Wood rules forbid passing: fill any LEGAL empty point
-            // 2026-11-04: Try each empty point until finding a legal one
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            // 2026-11-04 主人原则：房子不是集装箱。
-            // 先在循环外把棋盘状态提取到基本类型集装箱（轻量、可多次传递），
-            // 再在循环里用集装箱重建临时棋盘，不传递对象本身。
-            i32[13][13] grid_data = {0};
-            for (i32 si = 0; si < 13; si++) {
-                for (i32 sj = 0; sj < 13; sj++) {
-                    grid_data[si][sj] = b2.get(si, sj);
-                }
-            }
-            i32 black_caps_data = b2.get_captures(1);
-            i32 white_caps_data = b2.get_captures(2);
-            i32 ko_x_data = b2.get_ko_x();
-            i32 ko_y_data = b2.get_ko_y();
-            i32 move_count_data = b2.get_move_count();
-            i32 game_state_data = b2.get_game_over_state();
-            i32 game_move_data = b2.get_game_over_move();
-            // Try each empty point in order until finding a legal one
-            for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
-                i32 candidate = all_empty[idx];
-                i32 cx = candidate / 13;
-                i32 cy = candidate - cx * 13;
-                // 用集装箱重建临时棋盘
-                Board test_board = new Board();
-                for (i32 si = 0; si < 13; si++) {
-                    for (i32 sj = 0; sj < 13; sj++) {
-                        test_board.set(si, sj, grid_data[si][sj]);
-                    }
-                }
-                test_board.set_captures(1, black_caps_data);
-                test_board.set_captures(2, white_caps_data);
-                test_board.set_ko(ko_x_data, ko_y_data);
-                test_board.set_move_count(move_count_data);
-                test_board.set_game_over_state(game_state_data);
-                test_board.set_game_over_move(game_move_data);
-                i32 r = test_board.place_stone(cx, cy, color);
-                if (r >= 0) {
-                    best_enc = candidate;
-                    debug_log_i32(1, "L2", "filling legal", best_enc);
-                }
-            }
-            if (best_enc < 0) {
-                // No legal move found (cannot_move)
-                this.last_x = -1;
-                this.last_y = -1;
-                return b2;
-            }
-        }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;
@@ -666,141 +368,20 @@ public class Level3 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L3", "genmove color", color);
-        i32 opp = b2.opponent(color);
-        i32 best_enc = -1;
-        i32 best_score = -1000000;
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        
-        // 2026-11-05 概率控制：获取本等级的战术启用概率
-        i32 sac_prob = get_sacrifice_probability(3);
-        i32 rescue_prob = get_rescue_probability(3);
-        i32 ko_prob = get_ko_analysis_probability(3);
-        bool allow_sacrifice = roll_probability(b2.rand_below(100), sac_prob);
-        bool prioritize_rescue = roll_probability(b2.rand_below(100), rescue_prob);
-        bool analyze_ko = roll_probability(b2.rand_below(100), ko_prob);
-        
-        // Save full board state for restoration after virtual placement
-        i32[13][13] saved_grid = {0};
-        for (i32 i = 0; i < 13; i++) {
-            for (i32 j = 0; j < 13; j++) {
-                saved_grid[i][j] = b2.get(i, j);
-            }
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 24, 3, 14, 50, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
         }
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
-                if (b2.get(x, y) == 0) {
-                    bool is_ko = b2.is_ko_point(x, y);
-                    // virtual placement
-                    b2.set(x, y, color);
-                    i32 cap = 0;
-                    i32 atari = 0;
-                    for (i32 d = 0; d < 4; d++) {
-                        i32 nx = x + dxs[d];
-                        i32 ny = y + dys[d];
-                        if (b2.is_valid(nx, ny)) {
-                            if (b2.get(nx, ny) == opp) {
-                                i32 l = b2.count_liberties(nx, ny);
-                                if (l == 0) {
-                                    cap = cap + 1;
-                                } else if (l == 1) {
-                                    atari = atari + 1;
-                                }
-                            }
-                        }
-                    }
-                    bool alive = b2.count_liberties(x, y) > 0;
-                    i32 self_libs = b2.count_liberties(x, y);
-                    // Restore full board state (including captured stones)
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
-                            b2.set(i, j, saved_grid[i][j]);
-                        }
-                    }
-                    // legality filter
-                    bool legal = true;
-                    if (!alive && cap == 0) {
-                        legal = false;
-                    }
-                    if (!allow_sacrifice && !alive && cap == 0) {
-                        legal = false;  // only a real suicide (no capture) is banned
-                    }
-                    if (is_ko && cap == 1) {
-                        // Ko recapture is illegal regardless of whether the
-                        // engine analyses ko; never let it reach place_stone.
-                        legal = false;
-                    }
-                    if (legal) {
-                        i32 score = cap * 1000 + atari * 60 + self_libs * 8;
-                        i32 neighbors = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) != 0) {
-                                    neighbors = neighbors + 1;
-                                }
-                            }
-                        }
-                        score = score + neighbors * 4;
-                        i32 dist = x - 6;
-                        if (dist < 0) {
-                            dist = -dist;
-                        }
-                        i32 dy2 = y - 6;
-                        if (dy2 < 0) {
-                            dy2 = -dy2;
-                        }
-                        score = score + (12 - dist - dy2) * 2;
-                        // 2026-11-05 de-homogenization: small noise so equal
-                        // or near-equal positions do not replay identically.
-                        score = score + b2.rand_below(21) - 10;
-                        if (score > best_score) {
-                            best_score = score;
-                            best_enc = x * 13 + y;
-                        } else if (score == best_score && score > -1000000) {
-                            // 2026-11-05: random tie-break to avoid the same
-                            // deterministic move sequence every game.
-                            if (b2.rand_below(2) == 0) {
-                                best_enc = x * 13 + y;
-                            }
-                        }
-                    }
-                }
-            }
+        if (enc < 0) {
+            this.last_x = -1;
+            this.last_y = -1;
+            return b2;
         }
-        if (best_enc < 0) {
-            // Wood rules forbid passing: fill any empty point (random)
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            if (n_all > 0) {
-                // Try empty points one by one until a legal one is found.
-                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
-                    i32 candidate = all_empty[idx];
-                    i32 cx = candidate / 13;
-                    i32 cy = candidate - cx * 13;
-                    if (b2.is_legal_placement(cx, cy, color)) {
-                        best_enc = candidate;
-                    }
-                }
-                debug_log_i32(1, "L3", "filling legal", best_enc);
-            } else {
-                this.last_x = -1;
-                this.last_y = -1;
-                return b2;
-            }
-        }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;
@@ -836,202 +417,20 @@ public class Level4 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L4", "genmove color", color);
-        i32 opp = b2.opponent(color);
-        i32 best_enc = -1;
-        i32 best_score = -1000000;
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        // 2026-11-05 概率控制：获取本等级的战术启用概率
-        i32 sac_prob = get_sacrifice_probability(4);
-        i32 rescue_prob = get_rescue_probability(4);
-        i32 ko_prob = get_ko_analysis_probability(4);
-        bool allow_sacrifice = roll_probability(b2.rand_below(100), sac_prob);
-        bool prioritize_rescue = roll_probability(b2.rand_below(100), rescue_prob);
-        bool analyze_ko = roll_probability(b2.rand_below(100), ko_prob);
-        
-        i32[13][13] saved_grid = {0};
-        for (i32 i = 0; i < 13; i++) {
-            for (i32 j = 0; j < 13; j++) {
-                saved_grid[i][j] = b2.get(i, j);
-            }
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 28, 3, 16, 80, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
         }
-        // Pass 1: heuristic scoring (same as Level3)
-        i32[169] cand_enc = {0};
-        i32[169] cand_score = {0};
-        i32 n_cand = 0;
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
-                if (b2.get(x, y) == 0) {
-                    bool is_ko = b2.is_ko_point(x, y);
-                    b2.set(x, y, color);
-                    i32 cap = 0;
-                    i32 atari = 0;
-                    for (i32 d = 0; d < 4; d++) {
-                        i32 nx = x + dxs[d];
-                        i32 ny = y + dys[d];
-                        if (b2.is_valid(nx, ny)) {
-                            if (b2.get(nx, ny) == opp) {
-                                i32 l = b2.count_liberties(nx, ny);
-                                if (l == 0) {
-                                    cap = cap + 1;
-                                } else if (l == 1) {
-                                    atari = atari + 1;
-                                }
-                            }
-                        }
-                    }
-                    bool alive = b2.count_liberties(x, y) > 0;
-                    i32 self_libs = b2.count_liberties(x, y);
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
-                            b2.set(i, j, saved_grid[i][j]);
-                        }
-                    }
-                    bool legal = true;
-                    if (!alive && cap == 0) {
-                        legal = false;
-                    }
-                    if (!allow_sacrifice && !alive && cap == 0) {
-                        legal = false;  // only a real suicide (no capture) is banned
-                    }
-                    if (is_ko && cap == 1) {
-                        // Ko recapture is illegal regardless of whether the
-                        // engine analyses ko; never let it reach place_stone.
-                        legal = false;
-                    }
-                    if (legal) {
-                        i32 score = cap * 1000 + atari * 60 + self_libs * 8;
-                        i32 neighbors = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) != 0) {
-                                    neighbors = neighbors + 1;
-                                }
-                            }
-                        }
-                        score = score + neighbors * 4;
-                        i32 dist = x - 6;
-                        if (dist < 0) {
-                            dist = -dist;
-                        }
-                        i32 dy2 = y - 6;
-                        if (dy2 < 0) {
-                            dy2 = -dy2;
-                        }
-                        score = score + (12 - dist - dy2) * 2;
-                        cand_enc[n_cand] = x * 13 + y;
-                        cand_score[n_cand] = score;
-                        n_cand = n_cand + 1;
-                    }
-                }
-            }
-        }
-        if (n_cand == 0) {
+        if (enc < 0) {
             this.last_x = -1;
             this.last_y = -1;
             return b2;
         }
-        // Pass 2: pick top 8 by score, do depth-1 search
-        // 2026-11-05: widened from 5 to 8. The heuristic top-5 often missed
-        // defensive points, making LV4 weaker than LV3 when playing White.
-        i32[8] top_enc = {-1, -1, -1, -1, -1, -1, -1, -1};
-        i32[8] top_score = {-1000000, -1000000, -1000000, -1000000, -1000000, -1000000, -1000000, -1000000};
-        for (i32 i = 0; i < n_cand; i++) {
-            i32 s = cand_score[i];
-            i32 e = cand_enc[i];
-            for (i32 k = 0; k < 8; k++) {
-                if (s > top_score[k]) {
-                    for (i32 m = 7; m > k; m--) {
-                        top_score[m] = top_score[m - 1];
-                        top_enc[m] = top_enc[m - 1];
-                    }
-                    top_score[k] = s;
-                    top_enc[k] = e;
-                    break;
-                }
-            }
-        }
-        b2.start_search(300000);
-        i32 best_val = -999999;
-        for (i32 k = 0; k < 8; k++) {
-            if (top_enc[k] < 0) {
-                break;
-            }
-            i32 cx = top_enc[k] / 13;
-            i32 cy = top_enc[k] - cx * 13;
-            i32[13][13] snap = {0};
-            for (i32 i = 0; i < 13; i++) {
-                for (i32 j = 0; j < 13; j++) {
-                    snap[i][j] = b2.get(i, j);
-                }
-            }
-            b2.set(cx, cy, color);
-            for (i32 d = 0; d < 4; d++) {
-                i32 nx = cx + dxs[d];
-                i32 ny = cy + dys[d];
-                if (b2.is_valid(nx, ny)) {
-                    if (b2.get(nx, ny) == opp) {
-                        if (b2.count_liberties(nx, ny) == 0) {
-                            b2.remove_group(nx, ny);
-                        }
-                    }
-                }
-            }
-            i32 val = b2.minimax(2, opp, color, -999999, 999999);
-            for (i32 i = 0; i < 13; i++) {
-                for (i32 j = 0; j < 13; j++) {
-                    b2.set(i, j, snap[i][j]);
-                }
-            }
-            if (val > -999999) {
-                // 2026-11-05 de-homogenization: small noise on the searched
-                // value, enough to vary equal positions.
-                val = val + b2.rand_below(41) - 20;
-            }
-            if (val > best_val) {
-                best_val = val;
-                best_enc = top_enc[k];
-            } else if (val == best_val && val > -999999) {
-                // 2026-11-05: random tie-break against deterministic replays.
-                if (b2.rand_below(2) == 0) {
-                    best_enc = top_enc[k];
-                }
-            }
-        }
-        if (best_enc < 0) {
-            // Wood rules forbid passing: fill any empty point (random)
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            if (n_all > 0) {
-                // Try empty points one by one until a legal one is found.
-                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
-                    i32 candidate = all_empty[idx];
-                    i32 cx = candidate / 13;
-                    i32 cy = candidate - cx * 13;
-                    if (b2.is_legal_placement(cx, cy, color)) {
-                        best_enc = candidate;
-                    }
-                }
-                debug_log_i32(1, "L4", "filling legal", best_enc);
-            } else {
-                this.last_x = -1;
-                this.last_y = -1;
-                return b2;
-            }
-        }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;
@@ -1068,356 +467,20 @@ public class Level5 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L5", "genmove color", color);
-        i32 opp = b2.opponent(color);
-        i32 best_enc = -1;
-        i32 best_val = -999999;
-        i32[4] dxs = {0, 0, 1, -1};
-        i32[4] dys = {1, -1, 0, 0};
-        
-        // 2026-11-05 概率控制：获取本等级的战术启用概率
-        i32 sac_prob = get_sacrifice_probability(5);
-        i32 rescue_prob = get_rescue_probability(5);
-        i32 ko_prob = get_ko_analysis_probability(5);
-        bool allow_sacrifice = roll_probability(b2.rand_below(100), sac_prob);
-        bool prioritize_rescue = roll_probability(b2.rand_below(100), rescue_prob);
-        bool analyze_ko = roll_probability(b2.rand_below(100), ko_prob);
-        
-        // Atari rescue: check if our group is in atari and find rescue moves
-        i32[6] gres = b2.analyze_groups(color);
-        i32 my_gval = gres[0];
-        i32 opp_gval = gres[1];
-        i32 my_atari_cnt = gres[2];
-        i32 opp_atari_cnt = gres[3];
-        i32 my_atari_max = gres[4];
-        i32 opp_atari_max = gres[5];
-        
-        // 2026-11-05: always enter rescue analysis when a friendly group is
-        // in atari. The old 60% probability made LV5 ignore 40% of ataris,
-        // which is why it lost to LV4 when playing White.
-        if (my_atari_cnt > 0) {
-            debug_log_i32(1, "L5", "atari detected, max_size", my_atari_max);
-            // Try to find rescue moves for atari groups
-            // A rescue move either: captures the attacking stones, or extends liberties
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        // Check if this move rescues an atari group
-                        bool is_rescue = false;
-                        // Try placing here and see if any atari group gains liberties
-                        i32[13][13] snap = {0};
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                snap[i][j] = b2.get(i, j);
-                            }
-                        }
-                        b2.set(x, y, color);
-                        // Check if any neighboring friendly group was in atari and now has >1 liberty
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny) && b2.get(nx, ny) == color) {
-                                i32 libs = b2.count_liberties(nx, ny);
-                                if (libs > 1) {
-                                    // This group might have been in atari
-                                    // Check if it was in atari before by checking snapshot
-                                    // Simple heuristic: if this group is connected to our stones and now has >1 lib
-                                    is_rescue = true;
-                                }
-                            }
-                        }
-                        // Also check if this captures enemy stones that were attacking
-                        i32 cap = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny) && b2.get(nx, ny) == opp) {
-                                if (b2.count_liberties(nx, ny) == 0) {
-                                    cap = cap + b2.remove_group(nx, ny);
-                                    is_rescue = true;
-                                }
-                            }
-                        }
-                        // Restore
-                        for (i32 i = 0; i < 13; i++) {
-                            for (i32 j = 0; j < 13; j++) {
-                                b2.set(i, j, snap[i][j]);
-                            }
-                        }
-                        
-                        if (is_rescue) {
-                            debug_log_i32_2(1, "L5", "rescue_x", x, "rescue_y", y);
-                            // Evaluate this rescue move with minimax
-                            b2.set(x, y, color);
-                            for (i32 d = 0; d < 4; d++) {
-                                i32 nx = x + dxs[d];
-                                i32 ny = y + dys[d];
-                                if (b2.is_valid(nx, ny) && b2.get(nx, ny) == opp) {
-                                    if (b2.count_liberties(nx, ny) == 0) {
-                                        b2.remove_group(nx, ny);
-                                    }
-                                }
-                            }
-                            i32 val = b2.minimax(3, opp, color, -999999, 999999);
-                            for (i32 i = 0; i < 13; i++) {
-                                for (i32 j = 0; j < 13; j++) {
-                                    b2.set(i, j, snap[i][j]);
-                                }
-                            }
-                            debug_log_i32(1, "L5", "rescue_val", val);
-                            if (val > best_val) {
-                                best_val = val;
-                                best_enc = x * 13 + y;
-                            }
-                        }
-                    }
-                }
-            }
-            // If we found a rescue move, try them in order of best value
-            if (best_enc >= 0) {
-                debug_log_i32(1, "L5", "trying rescue move", best_enc);
-                i32 mx = best_enc / 13;
-                i32 my = best_enc - mx * 13;
-                i32 r = b2.place_stone(mx, my, color);
-                if (r >= 0) {
-                    debug_log_i32_2(1, "L5", "rescue_ok_x", mx, "rescue_ok_y", my);
-                    this.last_x = mx;
-                    this.last_y = my;
-                    return b2;
-                } else {
-                    debug_log_i32(1, "L5", "rescue failed, trying others", r);
-                    // Try other rescue moves
-                    for (i32 x = 0; x < 13; x++) {
-                        for (i32 y = 0; y < 13; y++) {
-                            if (b2.get(x, y) == 0) {
-                                // Quick check if this is a rescue move
-                                bool is_rescue = false;
-                                i32[13][13] snap2 = {0};
-                                for (i32 i = 0; i < 13; i++) {
-                                    for (i32 j = 0; j < 13; j++) {
-                                        snap2[i][j] = b2.get(i, j);
-                                    }
-                                }
-                                b2.set(x, y, color);
-                                for (i32 d = 0; d < 4; d++) {
-                                    i32 nx = x + dxs[d];
-                                    i32 ny = y + dys[d];
-                                    if (b2.is_valid(nx, ny) && b2.get(nx, ny) == color) {
-                                        if (b2.count_liberties(nx, ny) > 1) {
-                                            is_rescue = true;
-                                        }
-                                    }
-                                }
-                                for (i32 i = 0; i < 13; i++) {
-                                    for (i32 j = 0; j < 13; j++) {
-                                        b2.set(i, j, snap2[i][j]);
-                                    }
-                                }
-                                if (is_rescue) {
-                                    r = b2.place_stone(x, y, color);
-                                    if (r >= 0) {
-                                        debug_log_i32_2(1, "L5", "fallback_rescue_x", x, "fallback_rescue_y", y);
-                                        this.last_x = x;
-                                        this.last_y = y;
-                                        return b2;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // No rescue worked, return -1
-                    this.last_x = -1;
-                    this.last_y = -1;
-                    return b2;
-                }
-            }
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 32, 3, 18, 120, 20, 0);
+        if (enc < 0) {
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
         }
-        
-        // Normal search if no atari rescue found.
-        // 2026-11-05: LV5 used to scan all 169 points with minimax(3), which
-        // exhausted the node budget and made it weaker than LV4. Use the same
-        // heuristic pruning as LV4, but keep depth 3 and widen to top 12.
-        i32[13][13] saved_grid = {0};
-        for (i32 i = 0; i < 13; i++) {
-            for (i32 j = 0; j < 13; j++) {
-                saved_grid[i][j] = b2.get(i, j);
-            }
-        }
-        // Pass 1: heuristic scoring of every legal point.
-        i32[169] cand_enc = {0};
-        i32[169] cand_score = {0};
-        i32 n_cand = 0;
-        for (i32 x = 0; x < 13; x++) {
-            for (i32 y = 0; y < 13; y++) {
-                if (b2.get(x, y) == 0) {
-                    bool is_ko = b2.is_ko_point(x, y);
-                    b2.set(x, y, color);
-                    i32 cap = 0;
-                    i32 atari = 0;
-                    for (i32 d = 0; d < 4; d++) {
-                        i32 nx = x + dxs[d];
-                        i32 ny = y + dys[d];
-                        if (b2.is_valid(nx, ny)) {
-                            if (b2.get(nx, ny) == opp) {
-                                i32 l = b2.count_liberties(nx, ny);
-                                if (l == 0) {
-                                    cap = cap + 1;
-                                } else if (l == 1) {
-                                    atari = atari + 1;
-                                }
-                            }
-                        }
-                    }
-                    bool alive = b2.count_liberties(x, y) > 0;
-                    i32 self_libs = b2.count_liberties(x, y);
-                    for (i32 i = 0; i < 13; i++) {
-                        for (i32 j = 0; j < 13; j++) {
-                            b2.set(i, j, saved_grid[i][j]);
-                        }
-                    }
-                    bool legal = true;
-                    if (!alive && cap == 0) {
-                        legal = false;
-                    }
-                    if (!allow_sacrifice && !alive && cap == 0) {
-                        legal = false;
-                    }
-                    if (is_ko && cap == 1) {
-                        legal = false;
-                    }
-                    if (legal) {
-                        i32 score = cap * 1000 + atari * 60 + self_libs * 8;
-                        i32 neighbors = 0;
-                        for (i32 d = 0; d < 4; d++) {
-                            i32 nx = x + dxs[d];
-                            i32 ny = y + dys[d];
-                            if (b2.is_valid(nx, ny)) {
-                                if (b2.get(nx, ny) != 0) {
-                                    neighbors = neighbors + 1;
-                                }
-                            }
-                        }
-                        score = score + neighbors * 4;
-                        i32 dist = x - 6;
-                        if (dist < 0) {
-                            dist = -dist;
-                        }
-                        i32 dy2 = y - 6;
-                        if (dy2 < 0) {
-                            dy2 = -dy2;
-                        }
-                        score = score + (12 - dist - dy2) * 2;
-                        cand_enc[n_cand] = x * 13 + y;
-                        cand_score[n_cand] = score;
-                        n_cand = n_cand + 1;
-                    }
-                }
-            }
-        }
-        if (n_cand == 0) {
+        if (enc < 0) {
             this.last_x = -1;
             this.last_y = -1;
             return b2;
         }
-        // Pass 2: top 12 by heuristic score.
-        i32[12] top_enc = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
-        i32[12] top_score = {-1000000, -1000000, -1000000, -1000000, -1000000, -1000000,
-                             -1000000, -1000000, -1000000, -1000000, -1000000, -1000000};
-        for (i32 i = 0; i < n_cand; i++) {
-            i32 s = cand_score[i];
-            i32 e = cand_enc[i];
-            for (i32 k = 0; k < 12; k++) {
-                if (s > top_score[k]) {
-                    for (i32 m = 11; m > k; m--) {
-                        top_score[m] = top_score[m - 1];
-                        top_enc[m] = top_enc[m - 1];
-                    }
-                    top_score[k] = s;
-                    top_enc[k] = e;
-                    break;
-                }
-            }
-        }
-        // Pass 3: depth-3 search on the shortlist.
-        b2.start_search(300000);
-        for (i32 k = 0; k < 12; k++) {
-            if (top_enc[k] < 0) {
-                break;
-            }
-            i32 cx = top_enc[k] / 13;
-            i32 cy = top_enc[k] - cx * 13;
-            bool is_ko = b2.is_ko_point(cx, cy);
-            i32[13][13] snap = {0};
-            for (i32 i = 0; i < 13; i++) {
-                for (i32 j = 0; j < 13; j++) {
-                    snap[i][j] = b2.get(i, j);
-                }
-            }
-            b2.set(cx, cy, color);
-            i32 cap = 0;
-            for (i32 d = 0; d < 4; d++) {
-                i32 nx = cx + dxs[d];
-                i32 ny = cy + dys[d];
-                if (b2.is_valid(nx, ny)) {
-                    if (b2.get(nx, ny) == opp) {
-                        if (b2.count_liberties(nx, ny) == 0) {
-                            cap = cap + b2.remove_group(nx, ny);
-                        }
-                    }
-                }
-            }
-            bool alive = b2.count_liberties(cx, cy) > 0;
-            i32 val = -999999;
-            if (alive && !(is_ko && cap == 1)) {
-                val = b2.minimax(3, opp, color, -999999, 999999);
-            }
-            for (i32 i = 0; i < 13; i++) {
-                for (i32 j = 0; j < 13; j++) {
-                    b2.set(i, j, snap[i][j]);
-                }
-            }
-            if (val > best_val) {
-                best_val = val;
-                best_enc = cx * 13 + cy;
-            } else if (val == best_val && val > -999999) {
-                // Random tie-breaking: equal value, randomly switch
-                if (b2.rand_below(2) == 0) {
-                    best_enc = cx * 13 + cy;
-                }
-            }
-        }
-        if (best_enc < 0) {
-            // Wood rules forbid passing: fill any empty point (random)
-            debug_log(1, "L5", "no best move, filling random");
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            if (n_all > 0) {
-                // Try empty points one by one until a legal one is found.
-                for (i32 idx = 0; idx < n_all && best_enc < 0; idx++) {
-                    i32 candidate = all_empty[idx];
-                    i32 cx = candidate / 13;
-                    i32 cy = candidate - cx * 13;
-                    if (b2.is_legal_placement(cx, cy, color)) {
-                        best_enc = candidate;
-                    }
-                }
-                debug_log_i32(1, "L5", "filling legal", best_enc);
-            } else {
-                this.last_x = -1;
-                this.last_y = -1;
-                return b2;
-            }
-        }
-        i32 mx = best_enc / 13;
-        i32 my = best_enc - mx * 13;
+        i32 mx = enc / 13;
+        i32 my = enc - mx * 13;
         i32 r = b2.place_stone(mx, my, color);
         if (r >= 0) {
             this.last_x = mx;
@@ -1453,36 +516,17 @@ public class Level6 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L6", "genmove color", color);
-        // 2026-11-06 Phase 2b: unified selective-search root.
-        // depth / width / per-candidate budget / noise are the only
-        // per-level knobs, so LV6-LV10 can no longer drift apart.
-        i32 enc = b2.search_root(color, 10, 2, 10, 4000, 20, 0);
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 24, 4, 12, 200, 20, 0);
         if (enc < 0) {
-            // Wood rules forbid passing: fall back to any legal empty point.
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
-                i32 candidate = all_empty[idx];
-                i32 cx = candidate / 13;
-                i32 cy = candidate - cx * 13;
-                if (b2.is_legal_placement(cx, cy, color)) {
-                    enc = candidate;
-                }
-            }
-            if (enc < 0) {
-                this.last_x = -1;
-                this.last_y = -1;
-                return b2;
-            }
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
+        }
+        if (enc < 0) {
+            this.last_x = -1;
+            this.last_y = -1;
+            return b2;
         }
         i32 mx = enc / 13;
         i32 my = enc - mx * 13;
@@ -1522,36 +566,17 @@ public class Level7 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L7", "genmove color", color);
-        // 2026-11-06 Phase 2b: unified selective-search root.
-        // depth / width / per-candidate budget / noise are the only
-        // per-level knobs, so LV6-LV10 can no longer drift apart.
-        i32 enc = b2.search_root(color, 14, 2, 10, 8000, 20, 0);
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 28, 4, 14, 350, 20, 0);
         if (enc < 0) {
-            // Wood rules forbid passing: fall back to any legal empty point.
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
-                i32 candidate = all_empty[idx];
-                i32 cx = candidate / 13;
-                i32 cy = candidate - cx * 13;
-                if (b2.is_legal_placement(cx, cy, color)) {
-                    enc = candidate;
-                }
-            }
-            if (enc < 0) {
-                this.last_x = -1;
-                this.last_y = -1;
-                return b2;
-            }
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
+        }
+        if (enc < 0) {
+            this.last_x = -1;
+            this.last_y = -1;
+            return b2;
         }
         i32 mx = enc / 13;
         i32 my = enc - mx * 13;
@@ -1588,36 +613,17 @@ public class Level8 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L8", "genmove color", color);
-        // 2026-11-06 Phase 2b: unified selective-search root.
-        // depth / width / per-candidate budget / noise are the only
-        // per-level knobs, so LV6-LV10 can no longer drift apart.
-        i32 enc = b2.search_root(color, 18, 2, 12, 12000, 20, 0);
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 36, 4, 16, 600, 20, 0);
         if (enc < 0) {
-            // Wood rules forbid passing: fall back to any legal empty point.
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
-                i32 candidate = all_empty[idx];
-                i32 cx = candidate / 13;
-                i32 cy = candidate - cx * 13;
-                if (b2.is_legal_placement(cx, cy, color)) {
-                    enc = candidate;
-                }
-            }
-            if (enc < 0) {
-                this.last_x = -1;
-                this.last_y = -1;
-                return b2;
-            }
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
+        }
+        if (enc < 0) {
+            this.last_x = -1;
+            this.last_y = -1;
+            return b2;
         }
         i32 mx = enc / 13;
         i32 my = enc - mx * 13;
@@ -1654,36 +660,17 @@ public class Level9 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L9", "genmove color", color);
-        // 2026-11-06 Phase 2b: unified selective-search root.
-        // depth / width / per-candidate budget / noise are the only
-        // per-level knobs, so LV6-LV10 can no longer drift apart.
-        i32 enc = b2.search_root(color, 24, 2, 14, 20000, 20, 0);
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 28, 5, 12, 1000, 20, 0);
         if (enc < 0) {
-            // Wood rules forbid passing: fall back to any legal empty point.
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
-                i32 candidate = all_empty[idx];
-                i32 cx = candidate / 13;
-                i32 cy = candidate - cx * 13;
-                if (b2.is_legal_placement(cx, cy, color)) {
-                    enc = candidate;
-                }
-            }
-            if (enc < 0) {
-                this.last_x = -1;
-                this.last_y = -1;
-                return b2;
-            }
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
+        }
+        if (enc < 0) {
+            this.last_x = -1;
+            this.last_y = -1;
+            return b2;
         }
         i32 mx = enc / 13;
         i32 my = enc - mx * 13;
@@ -1720,36 +707,17 @@ public class Level10 implements MoveGenerator {
     public Board genmove(Board board, i32 color) {
         Board b2 = new Board();
         b2.copy_from(board);
-        debug_log_i32(1, "L10", "genmove color", color);
-        // 2026-11-06 Phase 2b: unified selective-search root.
-        // depth / width / per-candidate budget / noise are the only
-        // per-level knobs, so LV6-LV10 can no longer drift apart.
-        i32 enc = b2.search_root(color, 24, 2, 18, 30000, 20, 0);
+        // 2026-11-09: unified compute ladder -- every level runs the same
+        // selective search; only time budget / depth / width differ.
+        i32 enc = b2.search_root_timed(color, 36, 5, 14, 1800, 20, 0);
         if (enc < 0) {
-            // Wood rules forbid passing: fall back to any legal empty point.
-            i32[169] all_empty = {0};
-            i32 n_all = 0;
-            for (i32 x = 0; x < 13; x++) {
-                for (i32 y = 0; y < 13; y++) {
-                    if (b2.get(x, y) == 0) {
-                        all_empty[n_all] = x * 13 + y;
-                        n_all = n_all + 1;
-                    }
-                }
-            }
-            for (i32 idx = 0; idx < n_all && enc < 0; idx++) {
-                i32 candidate = all_empty[idx];
-                i32 cx = candidate / 13;
-                i32 cy = candidate - cx * 13;
-                if (b2.is_legal_placement(cx, cy, color)) {
-                    enc = candidate;
-                }
-            }
-            if (enc < 0) {
-                this.last_x = -1;
-                this.last_y = -1;
-                return b2;
-            }
+            // Wood rules forbid passing: fall back to any legal point.
+            enc = b2.any_legal_move(color);
+        }
+        if (enc < 0) {
+            this.last_x = -1;
+            this.last_y = -1;
+            return b2;
         }
         i32 mx = enc / 13;
         i32 my = enc - mx * 13;

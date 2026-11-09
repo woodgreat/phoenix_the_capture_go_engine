@@ -61,6 +61,10 @@ public class Board {
     // Set to 1 when a search bails out because the node budget is spent.
     // search_root uses it to tell "completed" from "truncated" rounds.
     i32 search_cutoff;
+    // 2026-11-09: wall-clock deadline for time-limited search.
+    // 0 = no deadline (node-budget mode, LV6-LV9).
+    i64 search_deadline_ms;
+    i32 search_timed_out;
 
     // Simple ko: point of the last single-stone capture (-1 = no ko).
     // The side to move may not capture exactly one stone at this point
@@ -123,6 +127,8 @@ public class Board {
         this.search_budget = 300000;
         this.child_n = 0;
         this.search_cutoff = 0;
+        this.search_deadline_ms = 0;
+        this.search_timed_out = 0;
         this.capture_history_len = 0;
         // Initialize TT arrays (2026-10-10)
         this.init_search_tables();
@@ -192,6 +198,8 @@ public class Board {
         this.search_budget = src.search_budget;
         this.child_n = src.child_n;
         this.search_cutoff = src.search_cutoff;
+        this.search_deadline_ms = src.search_deadline_ms;
+        this.search_timed_out = src.search_timed_out;
         this.ko_x = src.ko_x;
         this.ko_y = src.ko_y;
         this.game_over_state = src.game_over_state;
@@ -591,6 +599,21 @@ public class Board {
         return (alive || cap > 0) && !ko_bad;
     }
 
+    // 2026-11-09: first legal empty point (Wood rules forbid pass).
+    // Returns an encoded point, or -1 only when no legal move exists.
+    public i32 any_legal_move(i32 color) {
+        for (i32 x = 0; x < BOARD_SIZE; x++) {
+            for (i32 y = 0; y < BOARD_SIZE; y++) {
+                if (this.is_empty(x, y)) {
+                    if (this.is_legal_placement(x, y, color)) {
+                        return x * BOARD_SIZE + y;
+                    }
+                }
+            }
+        }
+        return -1;
+    }
+
     // Get capture history length
     public i32 get_capture_history_len() {
         return this.capture_history_len;
@@ -777,6 +800,13 @@ public class Board {
     public void start_search(i32 budget) {
         this.search_nodes = 0;
         this.search_budget = budget;
+    }
+
+    // 2026-11-09: wall-clock time in milliseconds (Unix epoch) for the
+    // time-limited root search. Fully-qualified Rust path, same as the
+    // rng seed above (Hust B1 workaround).
+    public i64 now_ms() {
+        return std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_millis() as i64;
     }
     
     // Set random seed for move selection randomness
@@ -1301,6 +1331,19 @@ public class Board {
         i32 alpha = alpha_in;
         i32 beta = beta_in;
         this.search_nodes = this.search_nodes + 1;
+        // 2026-11-09: time limit. Check every 256 nodes to keep the clock
+        // overhead low; once flagged, unwind to the root immediately.
+        if (this.search_deadline_ms > 0) {
+            if ((this.search_nodes % 256) == 0) {
+                if (this.now_ms() >= this.search_deadline_ms) {
+                    this.search_timed_out = 1;
+                    this.search_cutoff = 1;
+                }
+            }
+            if (this.search_timed_out == 1) {
+                return this.evaluate_for(ai_color);
+            }
+        }
         if (depth <= 0 || this.search_nodes > this.search_budget) {
             if (this.search_nodes > this.search_budget) {
                 this.search_cutoff = 1;
@@ -1321,7 +1364,7 @@ public class Board {
         this.build_liberty_map();
         this.select_children(color_to_move, width);
         // Copy the candidate list: recursion overwrites child_buf/child_n.
-        i32[24] sel = {0};
+        i32[64] sel = {0};
         i32 nsel = this.child_n;
         for (i32 i = 0; i < nsel; i++) {
             sel[i] = this.child_buf[i];
@@ -1337,6 +1380,9 @@ public class Board {
             // 2026-11-06: same budget guard as minimax() -- do not keep
             // calling the children once the budget is spent.
             if (this.search_nodes > this.search_budget) {
+                break;
+            }
+            if (this.search_timed_out == 1) {
                 break;
             }
             i32 x = sel[si] / 13;
@@ -1422,7 +1468,7 @@ public class Board {
         i32 opp = this.opponent(color);
         i32[169] cand = {0};
         i32[169] cval = {0};
-        i32[24] top = {0};
+        i32[64] top = {0};
         i32 n = 0;
         i32[13][13] snap = {0};
         i32 save_ko_x = this.ko_x;
@@ -1430,7 +1476,7 @@ public class Board {
         i32 save_bc = this.black_captures;
         i32 save_wc = this.white_captures;
         i32 save_mc = this.move_count;
-        for (i32 k = 0; k < 24; k++) {
+        for (i32 k = 0; k < 64; k++) {
             top[k] = -1;
         }
         for (i32 x = 0; x < 13; x++) {
@@ -1483,7 +1529,7 @@ public class Board {
             }
         }
         i32 nsel = root_width;
-        if (nsel > 24) {
+        if (nsel > 64) {
             nsel = 24;
         }
         if (nsel > n) {
@@ -1574,10 +1620,190 @@ public class Board {
         return best_enc;
     }
 
-    // Alpha-beta minimax over the current position. Depth 0 returns the
-    // static evaluation. Captures inside the search REALLY remove stones
-    // (via remove_group); each node restores the grid from a snapshot
-    // taken at entry, so the caller sees an unchanged board.
+    // 2026-11-09: time-limited iterative deepening at the root.
+    // Searches depth 2..max_depth; a depth is adopted only when every root
+    // candidate finished before the wall-clock deadline. If even depth 2
+    // does not finish, the best static move is returned.
+    public i32 search_root_timed(i32 color, i32 root_width, i32 max_depth, i32 child_width, i64 time_ms, i32 noise, i32 blunder) {
+        this.search_deadline_ms = this.now_ms() + time_ms;
+        this.search_timed_out = 0;
+        i32 opp = this.opponent(color);
+        i32[169] cand = {0};
+        i32[169] cval = {0};
+        i32[64] top = {0};
+        i32 n = 0;
+        i32[13][13] snap = {0};
+        i32 save_ko_x = this.ko_x;
+        i32 save_ko_y = this.ko_y;
+        i32 save_bc = this.black_captures;
+        i32 save_wc = this.white_captures;
+        i32 save_mc = this.move_count;
+        for (i32 k = 0; k < 64; k++) {
+            top[k] = -1;
+        }
+        // --- static ranking (same as search_root) ---
+        for (i32 x = 0; x < 13; x++) {
+            for (i32 y = 0; y < 13; y++) {
+                if (this.grid[x][y] == 0) {
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            snap[i][j] = this.grid[i][j];
+                        }
+                    }
+                    this.grid[x][y] = color;
+                    i32 cap = 0;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 ax = x;
+                        i32 ay = y;
+                        if (d == 0) { ax = x + 1; }
+                        if (d == 1) { ax = x - 1; }
+                        if (d == 2) { ay = y + 1; }
+                        if (d == 3) { ay = y - 1; }
+                        if (this.is_valid(ax, ay)) {
+                            if (this.grid[ax][ay] == opp) {
+                                if (this.count_liberties(ax, ay) == 0) {
+                                    cap = cap + this.remove_group(ax, ay);
+                                }
+                            }
+                        }
+                    }
+                    bool alive = this.count_liberties(x, y) > 0;
+                    bool ok = alive || cap > 0;
+                    if (this.is_ko_point(x, y) && cap == 1) {
+                        ok = false;
+                    }
+                    if (ok) {
+                        i32 v = this.evaluate_for(color) + cap * 2000;
+                        cand[n] = x * 13 + y;
+                        cval[n] = v;
+                        n = n + 1;
+                    }
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            this.grid[i][j] = snap[i][j];
+                        }
+                    }
+                    this.ko_x = save_ko_x;
+                    this.ko_y = save_ko_y;
+                    this.black_captures = save_bc;
+                    this.white_captures = save_wc;
+                    this.move_count = save_mc;
+                }
+            }
+        }
+        i32 nsel = root_width;
+        if (nsel > 64) {
+            nsel = 24;
+        }
+        if (nsel > n) {
+            nsel = n;
+        }
+        for (i32 k = 0; k < nsel; k++) {
+            i32 bi = -1;
+            i32 bv = -999999999;
+            for (i32 i = 0; i < n; i++) {
+                if (cval[i] > bv) {
+                    bv = cval[i];
+                    bi = i;
+                }
+            }
+            if (bi >= 0) {
+                top[k] = cand[bi];
+                cval[bi] = -999999999;
+            }
+        }
+        i32 best_enc = -1;
+        if (nsel > 0) {
+            best_enc = top[0];
+        }
+        // --- iterative deepening ---
+        i32 depth = 2;
+        while (depth <= max_depth && best_enc >= 0) {
+            i32 d_best_enc = -1;
+            i32 d_best_val = -999999;
+            bool complete = true;
+            for (i32 k = 0; k < nsel; k++) {
+                if (this.search_timed_out == 1) {
+                    complete = false;
+                    break;
+                }
+                if (this.now_ms() >= this.search_deadline_ms) {
+                    this.search_timed_out = 1;
+                    complete = false;
+                    break;
+                }
+                i32 enc = top[k];
+                if (enc >= 0) {
+                    i32 x = enc / 13;
+                    i32 y = enc - x * 13;
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            snap[i][j] = this.grid[i][j];
+                        }
+                    }
+                    this.grid[x][y] = color;
+                    for (i32 d = 0; d < 4; d++) {
+                        i32 ax = x;
+                        i32 ay = y;
+                        if (d == 0) { ax = x + 1; }
+                        if (d == 1) { ax = x - 1; }
+                        if (d == 2) { ay = y + 1; }
+                        if (d == 3) { ay = y - 1; }
+                        if (this.is_valid(ax, ay)) {
+                            if (this.grid[ax][ay] == opp) {
+                                if (this.count_liberties(ax, ay) == 0) {
+                                    this.remove_group(ax, ay);
+                                }
+                            }
+                        }
+                    }
+                    this.search_nodes = 0;
+                    this.search_budget = 1000000000;
+                    this.search_cutoff = 0;
+                    i32 val = this.minimax_sel(depth, opp, color, -INF, INF, child_width);
+                    for (i32 i = 0; i < 13; i++) {
+                        for (i32 j = 0; j < 13; j++) {
+                            this.grid[i][j] = snap[i][j];
+                        }
+                    }
+                    this.ko_x = save_ko_x;
+                    this.ko_y = save_ko_y;
+                    this.black_captures = save_bc;
+                    this.white_captures = save_wc;
+                    this.move_count = save_mc;
+                    if (this.search_timed_out == 1) {
+                        complete = false;
+                        break;
+                    }
+                    if (noise > 0) {
+                        val = val + this.rand_below(noise * 2 + 1) - noise;
+                    }
+                    if (val > d_best_val) {
+                        d_best_val = val;
+                        d_best_enc = enc;
+                    }
+                }
+            }
+            if (!complete) {
+                break;
+            }
+            if (d_best_enc >= 0) {
+                best_enc = d_best_enc;
+            }
+            depth = depth + 1;
+        }
+        this.search_deadline_ms = 0;
+        this.search_timed_out = 0;
+        if (blunder > 0 && nsel > 1) {
+            if (this.rand_below(100) < blunder) {
+                i32 pick = this.rand_below(nsel);
+                if (top[pick] >= 0) {
+                    best_enc = top[pick];
+                }
+            }
+        }
+        return best_enc;
+    }
     // NOTE (2026-10-09): TT integration PAUSED (Hust B6~B9); the full
     // TT-enabled version is archived in test/tt_minimax_reference.hust.
     // Params are immutable in Hust: alpha/beta are rebound to locals.
