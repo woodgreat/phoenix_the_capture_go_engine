@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.8.20261112203950");
+        println!("phoenix 0.3.9.20261112205533");
         return;
     }
     if (arg1 == "--help") {
@@ -299,7 +299,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Phoenix, Wood Capture Go Engine", p);
         } else if (cmd == "version") {
-            println!("={}0.3.8.20261112203950", p);
+            println!("={}0.3.9.20261112205533", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -365,7 +365,7 @@ void main() {
             println!("  show captures                 - print capture counts");
             println!("  show board                    - same as show_board");
             println!("  captures, c, sc, wood_captures- print capture counts");
-            println!("  print_stones_position, psp    - current stones as b<xy>,w<xy> (WSGF coords)");
+            println!("  print_stones_position, psp    - current stones as \"G7 黑 B[gg]\" list");
             println!("  print_moves, pm, move_history - print move history");
             println!("");
             println!("Game info:");
@@ -624,16 +624,22 @@ void main() {
                 for (i32 x = 0; x < 13; x++) {
                     i32 c = b.get(x, y);
                     if (c != 0) {
-                        String color_str = "b";
+                        String color_cn = "黑";
+                        String color_sgf = "B";
                         if (c == 2) {
-                            color_str = "w";
+                            color_cn = "白";
+                            color_sgf = "W";
                         }
-                        // 2026-11-12: same two-letter coordinate as WSGF/SGF (e.g. gi).
-                        String coord = wood_to_woodsgf(x, y);
+                        // 2026-11-12: "G7 黑 B[gg]" -- Wood point, colour,
+                        // and the matching WSGF token.
+                        String coord = xy_to_gtp(x, y);
+                        String sgf_coord = wood_to_woodsgf(x, y);
+                        String token = format!("{}[{}]", color_sgf, sgf_coord);
+                        String entry = format!("{} {} {}", coord, color_cn, token);
                         if (out.len() > 0) {
                             out = format!("{},", out);
                         }
-                        out = format!("{}{}{}", out, color_str, coord);
+                        out = format!("{}{}", out, entry);
                     }
                 }
             }
