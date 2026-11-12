@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.6.20261112145453");
+        println!("phoenix 0.3.7.20261112203444");
         return;
     }
     if (arg1 == "--help") {
@@ -299,7 +299,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Phoenix, Wood Capture Go Engine", p);
         } else if (cmd == "version") {
-            println!("={}0.3.6.20261112145453", p);
+            println!("={}0.3.7.20261112203444", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -314,6 +314,7 @@ void main() {
                 || a1 == "show_board" || a1 == "sb" || a1 == "show"
                 || a1 == "sc" || a1 == "captures" || a1 == "c"
                 || a1 == "wood_captures"
+                || a1 == "print_stones_position" || a1 == "psp"
                 || a1 == "result" || a1 == "r" || a1 == "final_score"
                 || a1 == "print_moves" || a1 == "pm" || a1 == "move_history"
                 || a1 == "export_sgf" || a1 == "es"
@@ -364,6 +365,7 @@ void main() {
             println!("  show captures                 - print capture counts");
             println!("  show board                    - same as show_board");
             println!("  captures, c, sc, wood_captures- print capture counts");
+            println!("  print_stones_position, psp    - current stones as b<coord>,w<coord>");
             println!("  print_moves, pm, move_history - print move history");
             println!("");
             println!("Game info:");
@@ -409,6 +411,8 @@ void main() {
             println!("captures");
             println!("c");
             println!("wood_captures");
+            println!("print_stones_position");
+            println!("psp");
             println!("result");
             println!("r");
             println!("final_score");
@@ -612,6 +616,28 @@ void main() {
             }
         } else if (cmd == "captures" || cmd == "wood_captures") {
             println!("={}black={} white={}", p, b.black_captures, b.white_captures);
+        } else if (cmd == "print_stones_position" || cmd == "psp") {
+            // 2026-11-12: current stones as b<coord>/w<coord>, comma-separated.
+            // Scan row-major (row 1 first, left to right); no totals.
+            String out = "";
+            for (i32 y = 0; y < 13; y++) {
+                for (i32 x = 0; x < 13; x++) {
+                    i32 c = b.get(x, y);
+                    if (c != 0) {
+                        String color_str = "b";
+                        if (c == 2) {
+                            color_str = "w";
+                        }
+                        String col = "abcdefghijklm".chars().nth((usize)x).unwrap().to_string();
+                        String coord = format!("{}{}", col, y + 1);
+                        if (out.len() > 0) {
+                            out = format!("{},", out);
+                        }
+                        out = format!("{}{}{}", out, color_str, coord);
+                    }
+                }
+            }
+            println!("={}{}", p, out);
         } else if (cmd == "show") {
             if (a1 == "captures") {
                 println!("={}black={} white={}", p, b.black_captures, b.white_captures);
