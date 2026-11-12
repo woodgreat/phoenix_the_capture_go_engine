@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.12.20261112220940");
+        println!("phoenix 0.3.13.20261112221419");
         return;
     }
     if (arg1 == "--help") {
@@ -301,7 +301,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Phoenix, Wood Capture Go Engine", p);
         } else if (cmd == "version") {
-            println!("={}0.3.12.20261112220940", p);
+            println!("={}0.3.13.20261112221419", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -992,7 +992,7 @@ void main() {
                     // 2026-11-06: shared with the human play path
                     b.refresh_game_over_state(move_count);
                     
-                    println!("={}{} black={} white={}", p, coord.clone(), b.black_captures, b.white_captures);
+                    println!("={}{}", p, coord.clone());
                     board_changed = true;
                 } else {
                     // last_x == -1: no legal move
