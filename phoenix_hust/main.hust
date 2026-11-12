@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.5.20261112143437");
+        println!("phoenix 0.3.6.20261112145453");
         return;
     }
     if (arg1 == "--help") {
@@ -299,7 +299,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Phoenix, Wood Capture Go Engine", p);
         } else if (cmd == "version") {
-            println!("={}0.3.5.20261112143437", p);
+            println!("={}0.3.6.20261112145453", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -724,13 +724,24 @@ void main() {
             } else {
                 filename = format!("phoenix_game_{}_{}_wood.wsgf", move_count, timestamp);
             }
-            
-            // Write to file
-            std::fs::write(filename.clone(), sgf_content.clone());
-            
-            println!("={}Wood SGF exported to file: {}", p, filename);
-            println!("{} moves exported", move_count);
-            std::io::Write::flush(&mut std::io::stdout());
+            if (move_count == 0) {
+                // 2026-11-12: do not create header-only records.
+                println!("?{}no moves to export", p);
+            } else {
+                bool ok = std::fs::write(filename.clone(), sgf_content.clone()).is_ok();
+                if (!ok) {
+                    println!("?{}export failed: {}", p, filename);
+                } else {
+                    if (a1 != "") {
+                        println!("={}Wood SGF exported to file: {}", p, filename);
+                    } else {
+                        String cwd = std::env::current_dir().unwrap().display().to_string();
+                        println!("={}Wood SGF exported to file: {}/{}", p, cwd, filename);
+                    }
+                    println!("{} moves exported", move_count);
+                    std::io::Write::flush(&mut std::io::stdout());
+                }
+            }
         } else if (cmd == "export_sgf") {
             // Export game in SGF format to file
             // Default: write to current executable directory
@@ -765,13 +776,24 @@ void main() {
                 // Default filename with timestamp
                 filename = format!("phoenix_game_{}_{}.sgf", move_count, timestamp);
             }
-            
-            // Write to file
-            std::fs::write(filename.clone(), sgf_content.clone());
-            
-            println!("={}SGF exported to file: {}", p, filename);
-            println!("{} moves exported", move_count);
-            std::io::Write::flush(&mut std::io::stdout());
+            if (move_count == 0) {
+                // 2026-11-12: do not create header-only records.
+                println!("?{}no moves to export", p);
+            } else {
+                bool ok = std::fs::write(filename.clone(), sgf_content.clone()).is_ok();
+                if (!ok) {
+                    println!("?{}export failed: {}", p, filename);
+                } else {
+                    if (a1 != "") {
+                        println!("={}SGF exported to file: {}", p, filename);
+                    } else {
+                        String cwd = std::env::current_dir().unwrap().display().to_string();
+                        println!("={}SGF exported to file: {}/{}", p, cwd, filename);
+                    }
+                    println!("{} moves exported", move_count);
+                    std::io::Write::flush(&mut std::io::stdout());
+                }
+            }
         } else if (cmd == "print_ai_level" || cmd == "wood_ai_level") {
             // Query with no argument, set when a level follows.
             // 2026-11-03: Now shows both black and white AI levels
