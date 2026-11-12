@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.2.20261112132641");
+        println!("phoenix 0.3.3.20261112133407");
         return;
     }
     if (arg1 == "--help") {
@@ -254,7 +254,9 @@ void main() {
             cmd = "print_target";
         } else if (cmd == "st") {
             cmd = "set_target";
-        } else if (cmd == "h" || cmd == "help" || cmd == "ls") {
+        } else if (cmd == "h" || cmd == "help") {
+            cmd = "help";
+        } else if (cmd == "ls") {
             cmd = "list_commands";
         } else if (cmd == "pm") {
             cmd = "print_moves";
@@ -303,7 +305,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("={}0.3.2.20261112132641", p);
+            println!("={}0.3.3.20261112133407", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -337,6 +339,62 @@ void main() {
                 k = "true";
             }
             println!("={}{}", p, k);
+        } else if (cmd == "help") {
+            // 2026-11-12: annotated command list for humans.
+            // list_commands stays name-only (GTP clients parse it).
+            println!("={}Phoenix commands (GTP v2)", p);
+            println!("");
+            println!("Protocol:");
+            println!("  protocol_version              - GTP protocol version");
+            println!("  name                          - engine name");
+            println!("  version                       - engine version");
+            println!("  known_command <cmd>           - true/false if command exists");
+            println!("  list_commands, ls             - command names only");
+            println!("  help, h                       - this annotated list");
+            println!("  quit, exit                    - exit the program");
+            println!("");
+            println!("Board setup:");
+            println!("  boardsize <n>                 - only 13 accepted");
+            println!("  clear_board, cb               - clear and set twist-cross opening");
+            println!("  use_clean_board, ucb          - switch to an empty board");
+            println!("  use_set_board, usb            - restore twist-cross opening");
+            println!("  komi <n>                      - only 0 accepted (no komi)");
+            println!("  fixed_handicap <n>            - 0 = empty, 2 = twist-cross");
+            println!("");
+            println!("Moves:");
+            println!("  play <color> <coord>          - e.g. play black G7; no pass");
+            println!("  pb <coord>, pw <coord>        - play black/white shortcut");
+            println!("  genmove <color>               - AI move, e.g. genmove white");
+            println!("  gb, gw                        - AI black/white shortcut");
+            println!("  undo                          - take back one move (not after game over)");
+            println!("");
+            println!("Display:");
+            println!("  show_board, sb                - print the board");
+            println!("  show captures                 - print capture counts");
+            println!("  show board                    - same as show_board");
+            println!("  captures, c, sc, wood_captures- print capture counts");
+            println!("  print_moves, pm, move_history - print move history");
+            println!("");
+            println!("Game info:");
+            println!("  result, r                     - gaming / black (N) / white (N) / draw (N)");
+            println!("  final_score                   - GTP score: B+N / W+N / 0");
+            println!("  print_target, pt, wood_target - show capture targets");
+            println!("  set_target <color> <n>, st    - set targets (default black 6 / white 5)");
+            println!("  print_wood_rules, wr, wood_rules - show rules version");
+            println!("");
+            println!("AI level:");
+            println!("  set_ai_level_all <n>, sala    - set both sides");
+            println!("  set_ai_level_black <n>, salb  - set black");
+            println!("  set_ai_level_white <n>, salw  - set white");
+            println!("  set ai <n>, set ai level <n>  - legacy alias for sala");
+            println!("  print_ai_level, pal, wood_ai_level - show levels");
+            println!("");
+            println!("Export:");
+            println!("  export_sgf, es                - write standard SGF");
+            println!("  export_wsgf, ew               - write Wood SGF (same coordinates)");
+            println!("");
+            println!("Debug:");
+            println!("  debug on|off|level <n>        - debug output (off in release)");
         } else if (cmd == "list_commands") {
             // 2026-11-12: keep this list identical to known_command.
             println!("={}protocol_version", p);
