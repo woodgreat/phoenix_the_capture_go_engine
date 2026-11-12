@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.1.20261109174408");
+        println!("phoenix 0.3.2.20261112132641");
         return;
     }
     if (arg1 == "--help") {
@@ -303,37 +303,42 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("={}0.3.1.20261109174408", p);
+            println!("={}0.3.2.20261112132641", p);
         } else if (cmd == "known_command") {
             String k = "false";
+            // 2026-11-12: keep this list identical to list_commands.
             if (a1 == "protocol_version" || a1 == "name" || a1 == "version"
-                || a1 == "known_command" || a1 == "list_commands" || a1 == "quit"
-                || a1 == "exit" || a1 == "boardsize" || a1 == "clear_board"
-                || a1 == "cb" || a1 == "play"
-                || a1 == "pb" || a1 == "pw" || a1 == "genmove"
-                || a1 == "gb" || a1 == "gw" || a1 == "show_board"
-                || a1 == "sb" || a1 == "undo"
-                || a1 == "fixed_handicap"
-                || a1 == "captures" || a1 == "c" || a1 == "sc"
-                || a1 == "print_target" || a1 == "pt"
+                || a1 == "known_command" || a1 == "list_commands"
+                || a1 == "quit" || a1 == "exit"
+                || a1 == "boardsize" || a1 == "clear_board" || a1 == "cb"
+                || a1 == "komi"
+                || a1 == "play" || a1 == "pb" || a1 == "pw"
+                || a1 == "genmove" || a1 == "gb" || a1 == "gw"
+                || a1 == "undo" || a1 == "fixed_handicap"
+                || a1 == "show_board" || a1 == "sb" || a1 == "show"
+                || a1 == "sc" || a1 == "captures" || a1 == "c"
+                || a1 == "wood_captures"
+                || a1 == "result" || a1 == "r" || a1 == "final_score"
+                || a1 == "print_moves" || a1 == "pm" || a1 == "move_history"
+                || a1 == "export_sgf" || a1 == "es"
+                || a1 == "export_wsgf" || a1 == "ew"
+                || a1 == "ucb" || a1 == "use_clean_board"
+                || a1 == "usb" || a1 == "use_set_board"
+                || a1 == "print_target" || a1 == "pt" || a1 == "wood_target"
                 || a1 == "set_target" || a1 == "st"
-                || a1 == "print_wood_rules" || a1 == "wr"
+                || a1 == "print_wood_rules" || a1 == "wr" || a1 == "wood_rules"
+                || a1 == "print_ai_level" || a1 == "pal" || a1 == "wood_ai_level"
                 || a1 == "set"
-                || a1 == "wood_ai_level" || a1 == "print_ai_level" || a1 == "pal"
                 || a1 == "set_ai_level_all" || a1 == "sala"
                 || a1 == "set_ai_level_black" || a1 == "salb"
                 || a1 == "set_ai_level_white" || a1 == "salw"
-                || a1 == "result" || a1 == "r"
-                || a1 == "final_score"
-                || a1 == "ucb" || a1 == "use_clean_board"
-                || a1 == "usb" || a1 == "use_set_board"
-                || a1 == "pm" || a1 == "print_moves" || a1 == "move_history"
-                || a1 == "export_sgf" || a1 == "es"
-                || a1 == "export_wsgf" || a1 == "ew") {
+                || a1 == "debug"
+                || a1 == "help" || a1 == "h" || a1 == "ls") {
                 k = "true";
             }
             println!("={}{}", p, k);
         } else if (cmd == "list_commands") {
+            // 2026-11-12: keep this list identical to known_command.
             println!("={}protocol_version", p);
             println!("name");
             println!("version");
@@ -344,10 +349,6 @@ void main() {
             println!("boardsize");
             println!("clear_board");
             println!("cb");
-            println!("ucb");
-            println!("use_clean_board");
-            println!("usb");
-            println!("use_set_board");
             println!("komi");
             println!("play");
             println!("pb");
@@ -355,23 +356,51 @@ void main() {
             println!("genmove");
             println!("gb");
             println!("gw");
+            println!("undo");
+            println!("fixed_handicap");
             println!("show_board");
             println!("sb");
             println!("show");
             println!("sc");
-            println!("set");
-            println!("wood_ai_level");
+            println!("captures");
+            println!("c");
             println!("wood_captures");
-            println!("wood_target");
-            println!("wood_rules");
             println!("result");
+            println!("r");
             println!("final_score");
-            println!("undo");
-            println!("fixed_handicap");
             println!("print_moves");
             println!("pm");
             println!("move_history");
             println!("export_sgf");
+            println!("es");
+            println!("export_wsgf");
+            println!("ew");
+            println!("ucb");
+            println!("use_clean_board");
+            println!("usb");
+            println!("use_set_board");
+            println!("print_target");
+            println!("pt");
+            println!("wood_target");
+            println!("set_target");
+            println!("st");
+            println!("print_wood_rules");
+            println!("wr");
+            println!("wood_rules");
+            println!("print_ai_level");
+            println!("pal");
+            println!("wood_ai_level");
+            println!("set");
+            println!("sala");
+            println!("set_ai_level_all");
+            println!("salb");
+            println!("set_ai_level_black");
+            println!("salw");
+            println!("set_ai_level_white");
+            println!("debug");
+            println!("help");
+            println!("h");
+            println!("ls");
         } else if (cmd == "boardsize") {
             i32 n = str_to_i32(a1.clone());
             if (n == 13) {
@@ -567,7 +596,7 @@ void main() {
                 println!("={}", p);
                 b.print_board();
             } else {
-                println!("?{}unknown command", p);
+                println!("?{}usage: show captures|board", p);
             }
         } else if (cmd == "result") {
             // Human-readable game status (internal state)
