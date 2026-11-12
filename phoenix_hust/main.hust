@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.10.20261112210509");
+        println!("phoenix 0.3.11.20261112215759");
         return;
     }
     if (arg1 == "--help") {
@@ -299,7 +299,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Phoenix, Wood Capture Go Engine", p);
         } else if (cmd == "version") {
-            println!("={}0.3.10.20261112210509", p);
+            println!("={}0.3.11.20261112215759", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -622,14 +622,20 @@ void main() {
             String out = "";
             for (i32 y = 0; y < 13; y++) {
                 for (i32 x = 0; x < 13; x++) {
-                    i32 c = b.get(x, y);
+                    // 2026-11-12: serpentine scan (odd rows right-to-left) so
+                    // the twist-cross reads B,W,B,W clockwise.
+                    i32 sx = x;
+                    if ((y % 2) == 1) {
+                        sx = 12 - x;
+                    }
+                    i32 c = b.get(sx, y);
                     if (c != 0) {
                         String color_sgf = "B";
                         if (c == 2) {
                             color_sgf = "W";
                         }
                         // 2026-11-12: WSGF token list, e.g. B[gg];W[hg].
-                        String sgf_coord = wood_to_woodsgf(x, y);
+                        String sgf_coord = wood_to_woodsgf(sx, y);
                         String token = format!("{}[{}]", color_sgf, sgf_coord);
                         if (out.len() > 0) {
                             out = format!("{};", out);
