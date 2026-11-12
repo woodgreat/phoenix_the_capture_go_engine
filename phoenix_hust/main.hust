@@ -108,11 +108,11 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.4.20261112134352");
+        println!("phoenix 0.3.5.20261112143437");
         return;
     }
     if (arg1 == "--help") {
-        println!("Phoenix - Wood Capture Go Engine (GTP v2)");
+        println!("Phoenix, Wood Capture Go Engine (GTP v2)");
         println!("usage: phoenix [--mode gtp] [--show-board] [--level N] [--version] [--help]");
         println!("  (no args)    interactive mode with banner and shortcuts");
         println!("  --mode gtp   strict GTP protocol for GUIs");
@@ -297,9 +297,9 @@ void main() {
         } else if (cmd == "protocol_version") {
             println!("={}2", p);
         } else if (cmd == "name") {
-            println!("={}Wood Capture Go", p);
+            println!("={}Phoenix, Wood Capture Go Engine", p);
         } else if (cmd == "version") {
-            println!("={}0.3.4.20261112134352", p);
+            println!("={}0.3.5.20261112143437", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
