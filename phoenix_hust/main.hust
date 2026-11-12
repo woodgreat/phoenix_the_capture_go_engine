@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.7.20261112203444");
+        println!("phoenix 0.3.8.20261112203950");
         return;
     }
     if (arg1 == "--help") {
@@ -299,7 +299,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Phoenix, Wood Capture Go Engine", p);
         } else if (cmd == "version") {
-            println!("={}0.3.7.20261112203444", p);
+            println!("={}0.3.8.20261112203950", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -365,7 +365,7 @@ void main() {
             println!("  show captures                 - print capture counts");
             println!("  show board                    - same as show_board");
             println!("  captures, c, sc, wood_captures- print capture counts");
-            println!("  print_stones_position, psp    - current stones as b<coord>,w<coord>");
+            println!("  print_stones_position, psp    - current stones as b<xy>,w<xy> (WSGF coords)");
             println!("  print_moves, pm, move_history - print move history");
             println!("");
             println!("Game info:");
@@ -628,8 +628,8 @@ void main() {
                         if (c == 2) {
                             color_str = "w";
                         }
-                        String col = "abcdefghijklm".chars().nth((usize)x).unwrap().to_string();
-                        String coord = format!("{}{}", col, y + 1);
+                        // 2026-11-12: same two-letter coordinate as WSGF/SGF (e.g. gi).
+                        String coord = wood_to_woodsgf(x, y);
                         if (out.len() > 0) {
                             out = format!("{},", out);
                         }
