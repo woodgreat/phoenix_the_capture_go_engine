@@ -108,7 +108,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.3.20261112133407");
+        println!("phoenix 0.3.4.20261112134352");
         return;
     }
     if (arg1 == "--help") {
@@ -177,8 +177,6 @@ void main() {
     AIWrapper ai = create_ai(ai_level);
     
     // 2026-11-03: Capture targets (black needs 6, white needs 5)
-    i32 black_target = 6;
-    i32 white_target = 5;
 
     i32 empty_streak = 0;
     
@@ -250,10 +248,6 @@ void main() {
             cmd = "captures";
         } else if (cmd == "wr") {
             cmd = "print_wood_rules";
-        } else if (cmd == "pt") {
-            cmd = "print_target";
-        } else if (cmd == "st") {
-            cmd = "set_target";
         } else if (cmd == "h" || cmd == "help") {
             cmd = "help";
         } else if (cmd == "ls") {
@@ -305,7 +299,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Wood Capture Go", p);
         } else if (cmd == "version") {
-            println!("={}0.3.3.20261112133407", p);
+            println!("={}0.3.4.20261112134352", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -326,15 +320,12 @@ void main() {
                 || a1 == "export_wsgf" || a1 == "ew"
                 || a1 == "ucb" || a1 == "use_clean_board"
                 || a1 == "usb" || a1 == "use_set_board"
-                || a1 == "print_target" || a1 == "pt" || a1 == "wood_target"
-                || a1 == "set_target" || a1 == "st"
                 || a1 == "print_wood_rules" || a1 == "wr" || a1 == "wood_rules"
                 || a1 == "print_ai_level" || a1 == "pal" || a1 == "wood_ai_level"
                 || a1 == "set"
                 || a1 == "set_ai_level_all" || a1 == "sala"
                 || a1 == "set_ai_level_black" || a1 == "salb"
                 || a1 == "set_ai_level_white" || a1 == "salw"
-                || a1 == "debug"
                 || a1 == "help" || a1 == "h" || a1 == "ls") {
                 k = "true";
             }
@@ -378,8 +369,6 @@ void main() {
             println!("Game info:");
             println!("  result, r                     - gaming / black (N) / white (N) / draw (N)");
             println!("  final_score                   - GTP score: B+N / W+N / 0");
-            println!("  print_target, pt, wood_target - show capture targets");
-            println!("  set_target <color> <n>, st    - set targets (default black 6 / white 5)");
             println!("  print_wood_rules, wr, wood_rules - show rules version");
             println!("");
             println!("AI level:");
@@ -392,9 +381,6 @@ void main() {
             println!("Export:");
             println!("  export_sgf, es                - write standard SGF");
             println!("  export_wsgf, ew               - write Wood SGF (same coordinates)");
-            println!("");
-            println!("Debug:");
-            println!("  debug on|off|level <n>        - debug output (off in release)");
         } else if (cmd == "list_commands") {
             // 2026-11-12: keep this list identical to known_command.
             println!("={}protocol_version", p);
@@ -437,11 +423,6 @@ void main() {
             println!("use_clean_board");
             println!("usb");
             println!("use_set_board");
-            println!("print_target");
-            println!("pt");
-            println!("wood_target");
-            println!("set_target");
-            println!("st");
             println!("print_wood_rules");
             println!("wr");
             println!("wood_rules");
@@ -455,7 +436,6 @@ void main() {
             println!("set_ai_level_black");
             println!("salw");
             println!("set_ai_level_white");
-            println!("debug");
             println!("help");
             println!("h");
             println!("ls");
@@ -537,6 +517,14 @@ void main() {
             if (color == 0) {
                 println!("?{}invalid color", p);
             } else if (a2 == "resign") {
+                // 2026-11-12: resign really ends the game (opponent wins).
+                if (color == 1) {
+                    b.set_game_over_state(2);
+                } else {
+                    b.set_game_over_state(1);
+                }
+                b.set_game_over_move(move_count);
+                board_changed = true;
                 println!("={}", p);
             } else if (a2 == "pass") {
                 // RULE: Wood Capture Go has no pass move
@@ -624,29 +612,6 @@ void main() {
             }
         } else if (cmd == "captures" || cmd == "wood_captures") {
             println!("={}black={} white={}", p, b.black_captures, b.white_captures);
-        } else if (cmd == "print_target" || cmd == "wood_target") {
-            println!("={}black_target={} white_target={}", p, black_target, white_target);
-        } else if (cmd == "set_target") {
-            // set_target black <N> / set_target white <N>
-            if (a1 == "black") {
-                i32 n = str_to_i32(a2.clone());
-                if (n >= 1 && n <= 20) {
-                    black_target = n;
-                    println!("={}", p);
-                } else {
-                    println!("?{}unacceptable target", p);
-                }
-            } else if (a1 == "white") {
-                i32 n = str_to_i32(a2.clone());
-                if (n >= 1 && n <= 20) {
-                    white_target = n;
-                    println!("={}", p);
-                } else {
-                    println!("?{}unacceptable target", p);
-                }
-            } else {
-                println!("?{}usage: set_target black|white <N>", p);
-            }
         } else if (cmd == "show") {
             if (a1 == "captures") {
                 println!("={}black={} white={}", p, b.black_captures, b.white_captures);
@@ -994,25 +959,6 @@ void main() {
                     hist_meta.truncate((usize)mbase3);
                     println!("={}pass", p);
                 }
-            }
-                } else if (cmd == "debug") {
-            // debug on | debug off | debug level <N>
-            if (a1 == "on") {
-                
-                println!("={}", p);
-            } else if (a1 == "off") {
-                
-                println!("={}", p);
-            } else if (a1 == "level") {
-                i32 lv = str_to_i32(a2.clone());
-                if (lv >= 0 && lv <= 3) {
-                    
-                    println!("={}", p);
-                } else {
-                    println!("?{}unacceptable level", p);
-                }
-            } else {
-                println!("?{}unknown debug command", p);
             }
 } else {
             println!("?{}unknown command", p);
