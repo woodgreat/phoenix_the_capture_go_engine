@@ -36,7 +36,9 @@ public i32 gtp_coord_to_x(String coord) {
 public i32 gtp_coord_to_y(String coord) {
     i32 num = 0;
     bool has_digit = false;
-    for (i32 i = 1; i < coord.len(); i++) {
+    // NOTE: count chars, not bytes (UTF-8 safe).
+    i32 nchars = coord.chars().count() as i32;
+    for (i32 i = 1; i < nchars; i++) {
         char c = coord.chars().nth((usize)i).unwrap();
         if (c >= '0' && c <= '9') {
             has_digit = true;
@@ -72,7 +74,8 @@ public char i32_to_sgf_char(i32 v) {
 
 // SGF column letter -> internal x.
 public i32 sgf_to_x(String sgf) {
-    if (sgf.len() < 1) {
+    i32 nchars = sgf.chars().count() as i32;
+    if (nchars < 1) {
         return -1;
     }
     char c = sgf.chars().nth(0).unwrap();
@@ -81,7 +84,8 @@ public i32 sgf_to_x(String sgf) {
 
 // SGF row letter -> internal y.
 public i32 sgf_to_y(String sgf) {
-    if (sgf.len() < 2) {
+    i32 nchars = sgf.chars().count() as i32;
+    if (nchars < 2) {
         return -1;
     }
     char c = sgf.chars().nth(1).unwrap();
@@ -98,7 +102,9 @@ public i32 sgf_char_to_i32(char c) {
 public i32 str_to_i32(String s) {
     i32 num = 0;
     bool has_digit = false;
-    for (i32 i = 0; i < s.len(); i++) {
+    // NOTE: String.len() is bytes; count chars so non-ASCII input cannot panic.
+    i32 nchars = s.chars().count() as i32;
+    for (i32 i = 0; i < nchars; i++) {
         char c = s.chars().nth((usize)i).unwrap();
         if (c >= '0' && c <= '9') {
             has_digit = true;
@@ -112,6 +118,41 @@ public i32 str_to_i32(String s) {
         return -1;
     }
     return num;
+}
+
+// 2026-11-16: ASCII case-insensitive comparison against a lowercase token.
+public bool token_equals_ci(String s, String lower) {
+    // NOTE: count chars, not bytes (UTF-8 safe).
+    i32 ns = s.chars().count() as i32;
+    i32 nl = lower.chars().count() as i32;
+    if (ns != nl) {
+        return false;
+    }
+    for (i32 i = 0; i < ns; i++) {
+        char ca = s.chars().nth((usize)i).unwrap();
+        char cb = lower.chars().nth((usize)i).unwrap();
+        i32 a = (i32)ca;
+        i32 b = (i32)cb;
+        if (a >= 65 && a <= 90) {
+            a = a + 32;
+        }
+        if (a != b) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Parse a GTP color token, case-insensitive.
+// black/b -> 1, white/w -> 2, anything else -> 0.
+public i32 parse_color(String token) {
+    if (token_equals_ci(token.clone(), "black") || token_equals_ci(token.clone(), "b")) {
+        return 1;
+    }
+    if (token_equals_ci(token.clone(), "white") || token_equals_ci(token.clone(), "w")) {
+        return 2;
+    }
+    return 0;
 }
 
 // Format the capture difference as a GTP final_score result.

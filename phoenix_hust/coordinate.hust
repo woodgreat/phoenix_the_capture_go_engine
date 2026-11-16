@@ -170,7 +170,8 @@ public i32 sgf_to_wood_y(i32 sgf_y) {
 // Example: "hg" -> (7, 6) = G8; "gh" -> (6, 7) = H7
 public i32[] sgf_to_wood(String sgf) {
     i32[] result;  // [x, y] or empty if invalid
-    if (sgf.len() < 2) {
+    i32 nchars = sgf.chars().count() as i32;
+    if (nchars < 2) {
         return result;
     }
     char x_char = sgf.chars().nth(0).unwrap();
@@ -240,14 +241,15 @@ public i32 gtp_number_to_wood_y(i32 n) {
 // Syntax: <column letter><row number>, e.g. "G7" -> (x=6, y=6).
 public i32[] gtp_to_wood(String gtp) {
     i32[] result;
-    if (gtp.len() < 2) {
+    i32 nchars = gtp.chars().count() as i32;
+    if (nchars < 2) {
         return result;
     }
     char col_char = gtp.chars().nth(0).unwrap();
 
     // Parse the number part (1-2 digits) -> row
     String num_str = "";
-    for (i32 i = 1; i < gtp.len(); i++) {
+    for (i32 i = 1; i < nchars; i++) {
         char c = gtp.chars().nth((usize)i).unwrap();
         num_str = num_str + &c.to_string();
     }
@@ -305,7 +307,8 @@ public bool wood_valid(i32 x, i32 y) {
 
 // Check if SGF coordinates are valid
 public bool sgf_valid(String sgf) {
-    if (sgf.len() < 2) {
+    i32 nchars = sgf.chars().count() as i32;
+    if (nchars < 2) {
         return false;
     }
     char x_char = sgf.chars().nth(0).unwrap();

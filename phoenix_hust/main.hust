@@ -1,7 +1,7 @@
 // Phoenix - Wood Capture Go Engine
 // Step 7: GTP main loop
 // Step 8: complete command set (undo, known_command, list_commands,
-//         fixed_handicap, wood_* extensions, ID echo)
+//         wood_* extensions, ID echo)
 //
 // GTP v2 protocol over stdin/stdout:
 //   request : [id] command args...
@@ -97,6 +97,55 @@ String format_time_value(i64 secs) {
     return result;
 }
 
+// 2026-11-16: "YYYYMMDD_HHMM" -> "YYYY-MM-DD" for the SGF DT property.
+String format_date_from_stamp(String stamp) {
+    String out = "";
+    for (i32 i = 0; i < 8; i++) {
+        if (i == 4 || i == 6) {
+            out.push('-');
+        }
+        out.push(stamp.chars().nth((usize)i).unwrap());
+    }
+    return out;
+}
+
+// 2026-11-16: SGF SimpleText escaping (backslash and closing bracket).
+String escape_sgf_text(String s) {
+    String out = "";
+    // NOTE: String.len() is bytes; count chars so UTF-8 names work.
+    i32 nchars = s.chars().count() as i32;
+    for (i32 i = 0; i < nchars; i++) {
+        char c = s.chars().nth((usize)i).unwrap();
+        if (c == '\\' || c == ']') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    return out;
+}
+
+// 2026-11-16: SGF RE value; empty while the game is still running.
+String sgf_result_value(i32 state, i32 black_cap, i32 white_cap) {
+    if (state == 1) {
+        i32 bdiff = black_cap - white_cap;
+        if (bdiff < 0) {
+            bdiff = 0;
+        }
+        return format!("B+{}", bdiff);
+    }
+    if (state == 2) {
+        i32 wdiff = white_cap - black_cap;
+        if (wdiff < 0) {
+            wdiff = 0;
+        }
+        return format!("W+{}", wdiff);
+    }
+    if (state == 3) {
+        return "W+0".to_string();
+    }
+    return "".to_string();
+}
+
 void main() {
     // CLI parsing: GNU Go style switches
     String arg1 = std::env::args().nth(1).unwrap_or(String::new());
@@ -108,7 +157,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.13.20261112221419");
+        println!("phoenix 0.3.14.20261116104423");
         return;
     }
     if (arg1 == "--help") {
@@ -167,6 +216,9 @@ void main() {
     i32 move_count = 0;
     // 2026-11-12: initial position for exports (2 = twist-cross, 0 = clean).
     i32 initial_setup = 2;
+    // 2026-11-16: real player names for SGF export (player_names command).
+    String player_black = "Black";
+    String player_white = "White";
     
     // 2026-11-03: Separate AI objects for black and white
     // 2026-11-04 fix: --level N now sets both black and white AI levels
@@ -195,13 +247,16 @@ void main() {
         }
         empty_streak = 0;
 
-        // Tokenize: cmd a1 a2
+        // Tokenize: cmd a1 a2 a3 a4
         String cmd = "";
         String a1 = "";
         String a2 = "";
         String a3 = "";
+        String a4 = "";
         i32 stage = 0;
-        for (i32 i = 0; i < line.len(); i++) {
+        // NOTE: String.len() is bytes; count chars so UTF-8 player names work.
+        i32 line_chars = line.chars().count() as i32;
+        for (i32 i = 0; i < line_chars; i++) {
             char ch = line.chars().nth((usize)i).unwrap();
             if (ch == ' ' || ch == '\t') {
                 if (stage == 0 && cmd.len() > 0) {
@@ -210,6 +265,8 @@ void main() {
                     stage = 2;
                 } else if (stage == 2 && a2.len() > 0) {
                     stage = 3;
+                } else if (stage == 3 && a3.len() > 0) {
+                    stage = 4;
                 }
             } else {
                 if (stage == 0) {
@@ -218,10 +275,34 @@ void main() {
                     a1.push(ch);
                 } else if (stage == 2) {
                     a2.push(ch);
-                } else {
+                } else if (stage == 3) {
                     a3.push(ch);
+                } else {
+                    a4.push(ch);
                 }
             }
+        }
+
+        // GTP numeric command id echo: "5 name" -> "=5 Wood Capture Go".
+        // 2026-11-16: strip the optional id BEFORE alias expansion, and shift
+        // every argument (previously a3 was dropped, so "5 play black D5" and
+        // "2 pb D5" both failed).
+        String p = " ";
+        bool all_digits = cmd.len() > 0;
+        i32 cmd_chars = cmd.chars().count() as i32;
+        for (i32 i = 0; i < cmd_chars; i++) {
+            char ch = cmd.chars().nth((usize)i).unwrap();
+            if (ch < '0' || ch > '9') {
+                all_digits = false;
+            }
+        }
+        if (all_digits) {
+            p = format!("{} ", cmd.clone());
+            cmd = a1.clone();
+            a1 = a2.clone();
+            a2 = a3.clone();
+            a3 = a4.clone();
+            a4 = "".to_string();
         }
 
         // alias normalization: shortcuts and legacy names
@@ -233,8 +314,6 @@ void main() {
             cmd = "use_clean_board";
         } else if (cmd == "usb") {
             cmd = "use_set_board";
-        } else if (cmd == "cb") {
-            cmd = "clear_board";
         } else if (cmd == "sb") {
             cmd = "show_board";
         } else if (cmd == "sc") {
@@ -258,6 +337,8 @@ void main() {
             cmd = "print_moves";
         } else if (cmd == "move_history") {
             cmd = "print_moves";
+        } else if (cmd == "pn") {
+            cmd = "player_names";
         } else if (cmd == "gb") {
             cmd = "genmove";
             a1 = "black";
@@ -274,23 +355,6 @@ void main() {
             a1 = "white";
         }
 
-
-        // GTP numeric command id echo: "5 name" -> "=5 Wood Capture Go"
-        String p = " ";
-        bool all_digits = cmd.len() > 0;
-        for (i32 i = 0; i < cmd.len(); i++) {
-            char ch = cmd.chars().nth((usize)i).unwrap();
-            if (ch < '0' || ch > '9') {
-                all_digits = false;
-            }
-        }
-        if (all_digits) {
-            p = format!("{} ", cmd.clone());
-            cmd = a1.clone();
-            a1 = a2.clone();
-            a2 = "".to_string();
-        }
-
         if (cmd == "quit") {
             println!("={}", p);
             println!("");
@@ -301,7 +365,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Phoenix, Wood Capture Go Engine", p);
         } else if (cmd == "version") {
-            println!("={}0.3.13.20261112221419", p);
+            println!("={}0.3.14.20261116104423", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -312,7 +376,8 @@ void main() {
                 || a1 == "komi"
                 || a1 == "play" || a1 == "pb" || a1 == "pw"
                 || a1 == "genmove" || a1 == "gb" || a1 == "gw"
-                || a1 == "undo" || a1 == "fixed_handicap"
+                || a1 == "undo"
+                || a1 == "player_names" || a1 == "pn"
                 || a1 == "show_board" || a1 == "sb" || a1 == "show"
                 || a1 == "sc" || a1 == "captures" || a1 == "c"
                 || a1 == "wood_captures"
@@ -348,15 +413,14 @@ void main() {
             println!("  quit, exit                    - exit the program");
             println!("");
             println!("Board setup:");
-            println!("  boardsize <n>                 - only 13 accepted");
-            println!("  clear_board, cb               - clear and set twist-cross opening");
+            println!("  boardsize <n>                 - only 13 accepted; clears the board");
+            println!("  clear_board, cb               - clear the board (no setup stones)");
             println!("  use_clean_board, ucb          - switch to an empty board");
             println!("  use_set_board, usb            - restore twist-cross opening");
             println!("  komi <n>                      - only 0 accepted (no komi)");
-            println!("  fixed_handicap <n>            - 0 = empty, 2 = twist-cross");
             println!("");
             println!("Moves:");
-            println!("  play <color> <coord>          - e.g. play black G7; no pass");
+            println!("  play <color> <coord>          - e.g. play black G7; no pass; color/coord case-insensitive");
             println!("  pb <coord>, pw <coord>        - play black/white shortcut");
             println!("  genmove <color>               - AI move, e.g. genmove white");
             println!("  gb, gw                        - AI black/white shortcut");
@@ -373,6 +437,7 @@ void main() {
             println!("Game info:");
             println!("  result, r                     - gaming / black (N) / white (N) / draw (N)");
             println!("  final_score                   - GTP score: B+N / W+N / 0");
+            println!("  player_names <b> <w>, pn      - set player names for SGF export");
             println!("  print_wood_rules, wr, wood_rules - show rules version");
             println!("");
             println!("AI level:");
@@ -405,7 +470,8 @@ void main() {
             println!("gb");
             println!("gw");
             println!("undo");
-            println!("fixed_handicap");
+            println!("player_names");
+            println!("pn");
             println!("show_board");
             println!("sb");
             println!("show");
@@ -446,9 +512,17 @@ void main() {
             println!("h");
             println!("ls");
         } else if (cmd == "boardsize") {
+            // 2026-11-16: GTP convention - setting the size clears the board.
             i32 n = str_to_i32(a1.clone());
             if (n == 13) {
+                b.clear();
+                hist_cells.clear();
+                hist_meta.clear();
+                move_history.clear();
+                move_count = 0;
+                initial_setup = 0;
                 println!("={}", p);
+                board_changed = true;
             } else {
                 println!("?{}unacceptable size", p);
             }
@@ -490,30 +564,14 @@ void main() {
             } else {
                 println!("?{}unacceptable komi", p);
             }
-        } else if (cmd == "fixed_handicap") {
-            // 0 = empty board without stones, 2 = twist-cross setup
-            i32 n = str_to_i32(a1.clone());
-            if (n == 0) {
-                b.clear();
-                hist_cells.clear();
-                hist_meta.clear();
-                move_history.clear();
-                move_count = 0;
-                initial_setup = 0;
-                println!("={}", p);
-                board_changed = true;
-            } else if (n == 2) {
-                b.clear();
-                b.setup_opening();
-                hist_cells.clear();
-                hist_meta.clear();
-                move_history.clear();
-                move_count = 0;
-                initial_setup = 2;
-                println!("={}", p);
-                board_changed = true;
+        } else if (cmd == "player_names" || cmd == "pn") {
+            // 2026-11-16: written to PB/PW on export. Names cannot contain spaces.
+            if (a1 == "" || a2 == "") {
+                println!("?{}usage: player_names <black> <white>", p);
             } else {
-                println!("?{}unacceptable handicap", p);
+                player_black = a1.clone();
+                player_white = a2.clone();
+                println!("={}", p);
             }
         } else if (cmd == "show_board") {
             println!("={}", p);
@@ -521,12 +579,8 @@ void main() {
         } else if (cmd == "play") {
             // play <color> <coord|pass|resign>
             debug_log_i32(1, "PLAY", "entry", 1);
-            i32 color = 0;
-            if (a1 == "black" || a1 == "b") {
-                color = 1;
-            } else if (a1 == "white" || a1 == "w") {
-                color = 2;
-            }
+            // 2026-11-16: color tokens are case-insensitive (B / BLACK / White).
+            i32 color = parse_color(a1.clone());
             if (color == 0) {
                 println!("?{}invalid color", p);
             } else if (a2 == "resign") {
@@ -618,6 +672,11 @@ void main() {
                 b.set_captures(2, m_wc);
                 b.set_ko(m_kx, m_ky);
                 b.set_move_count(m_mc);
+                // 2026-11-16: the game record must roll back too; otherwise
+                // print_moves and export still contain the undone move.
+                move_count = m_mc;
+                i32 hbase = m_mc * 4;
+                move_history.truncate((usize)hbase);
                 println!("={}", p);
                 board_changed = true;
             } else {
@@ -626,8 +685,9 @@ void main() {
         } else if (cmd == "captures" || cmd == "wood_captures") {
             println!("={}black={} white={}", p, b.black_captures, b.white_captures);
         } else if (cmd == "print_stones_position" || cmd == "psp") {
-            // 2026-11-12: current stones as b<coord>/w<coord>, comma-separated.
-            // Scan row-major (row 1 first, left to right); no totals.
+            // 2026-11-12: current stones as WSGF tokens (B[gg];W[hg]...).
+            // 2026-11-16: serpentine scan; clients should parse tokens and
+            // must not rely on row-major index order.
             String out = "";
             for (i32 y = 0; y < 13; y++) {
                 for (i32 x = 0; x < 13; x++) {
@@ -736,7 +796,14 @@ void main() {
             // Created: 2026-11-04
             // Author: 龙小虾 🦞
             
-            String sgf_content = format!("(;FF[4]GM[1]SZ[13]RU[WoodCaptureGo]PB[Black]PW[White]");
+            // 2026-11-16: real player names, komi/date, and RE when finished.
+            i64 time_value = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+            String timestamp = format_time_value(time_value);
+            String sgf_content = format!("(;FF[4]CA[UTF-8]GM[1]SZ[13]RU[WoodCaptureGo]PB[{}]PW[{}]KM[0]DT[{}]", escape_sgf_text(player_black.clone()), escape_sgf_text(player_white.clone()), format_date_from_stamp(timestamp.clone()));
+            String re_value = sgf_result_value(b.get_game_over_state(), b.black_captures, b.white_captures);
+            if (re_value != "") {
+                sgf_content = format!("{}RE[{}]", sgf_content, re_value);
+            }
             if (initial_setup == 2) {
                 sgf_content = format!("{}AB[gg][hh]AW[hg][gh]PL[B]", sgf_content);
             }
@@ -756,11 +823,6 @@ void main() {
             sgf_content = sgf_content + ")";
             
             // Generate filename with timestamp
-            // 2026-11-05: use the fully-qualified Rust path (Hust B1
-            // workaround) because hust 0.3.9 does not emit the `use` line.
-            i64 time_value = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
-            String timestamp = format_time_value(time_value);
-            
             // Check if user specified custom filename
             String filename;
             if (a1 != "") {
@@ -791,7 +853,14 @@ void main() {
             // Export game in SGF format to file
             // Default: write to current executable directory
             // Build SGF content using format! to avoid Hust string literal issues
-            String sgf_content = format!("(;FF[4]GM[1]SZ[13]RU[WoodCaptureGo]PB[Black]PW[White]");
+            // 2026-11-16: real player names, komi/date, and RE when finished.
+            i64 time_value = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+            String timestamp = format_time_value(time_value);
+            String sgf_content = format!("(;FF[4]CA[UTF-8]GM[1]SZ[13]RU[WoodCaptureGo]PB[{}]PW[{}]KM[0]DT[{}]", escape_sgf_text(player_black.clone()), escape_sgf_text(player_white.clone()), format_date_from_stamp(timestamp.clone()));
+            String re_value = sgf_result_value(b.get_game_over_state(), b.black_captures, b.white_captures);
+            if (re_value != "") {
+                sgf_content = format!("{}RE[{}]", sgf_content, re_value);
+            }
             if (initial_setup == 2) {
                 sgf_content = format!("{}AB[gg][hh]AW[hg][gh]PL[B]", sgf_content);
             }
@@ -810,11 +879,6 @@ void main() {
             sgf_content = sgf_content + ")";
             
             // Generate filename with timestamp
-            // 2026-10-31: Convert time value to formatted timestamp
-            // 2026-11-05: fully-qualified Rust path (Hust B1 workaround).
-            i64 time_value = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
-            String timestamp = format_time_value(time_value);
-            
             // Check if user specified custom filename
             String filename;
             if (a1 != "") {
@@ -939,12 +1003,8 @@ void main() {
             }
         } else if (cmd == "genmove") {
             // genmove <color>: level-1 AI (greedy capture / random)
-            i32 color = 0;
-            if (a1 == "black" || a1 == "b") {
-                color = 1;
-            } else if (a1 == "white" || a1 == "w") {
-                color = 2;
-            }
+            // 2026-11-16: color tokens are case-insensitive.
+            i32 color = parse_color(a1.clone());
             if (color == 0) {
                 println!("?{}invalid color", p);
             } else {
