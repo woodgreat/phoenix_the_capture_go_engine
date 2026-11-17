@@ -157,7 +157,7 @@ void main() {
     bool show_board_flag = false;
     i32 startup_level = 1;
     if (arg1 == "--version") {
-        println!("phoenix 0.3.14.20261116104423");
+        println!("phoenix 0.3.15.20261117085720");
         return;
     }
     if (arg1 == "--help") {
@@ -365,7 +365,7 @@ void main() {
         } else if (cmd == "name") {
             println!("={}Phoenix, Wood Capture Go Engine", p);
         } else if (cmd == "version") {
-            println!("={}0.3.14.20261116104423", p);
+            println!("={}0.3.15.20261117085720", p);
         } else if (cmd == "known_command") {
             String k = "false";
             // 2026-11-12: keep this list identical to list_commands.
@@ -420,7 +420,7 @@ void main() {
             println!("  komi <n>                      - only 0 accepted (no komi)");
             println!("");
             println!("Moves:");
-            println!("  play <color> <coord>          - e.g. play black G7; no pass; color/coord case-insensitive");
+            println!("  play <color> <coord>          - e.g. play black G7; no passing; color/coord case-insensitive");
             println!("  pb <coord>, pw <coord>        - play black/white shortcut");
             println!("  genmove <color>               - AI move, e.g. genmove white");
             println!("  gb, gw                        - AI black/white shortcut");
@@ -445,7 +445,7 @@ void main() {
             println!("  set_ai_level_black <n>, salb  - set black");
             println!("  set_ai_level_white <n>, salw  - set white");
             println!("  set ai <n>, set ai level <n>  - legacy alias for sala");
-            println!("  print_ai_level, pal, wood_ai_level - show levels");
+            println!("  print_ai_level, pal, wood_ai_level - show levels; pal <n> sets both");
             println!("");
             println!("Export:");
             println!("  export_sgf, es                - write standard SGF");
